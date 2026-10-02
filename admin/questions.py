@@ -360,7 +360,7 @@ class AdminQuestions:
                         content=ft.Column(
                             [
                                 ft.Text(
-                                    f"Question {question['question_order']}",
+                                    f"Question {question.get('quiz_question_order')}",
                                     size=14,
                                     weight=ft.FontWeight.BOLD,
                                 ),

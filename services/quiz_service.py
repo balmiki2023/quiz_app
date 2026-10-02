@@ -388,11 +388,15 @@ class QuizService:
             .table("questions")
             .select("*")
             .eq("category_id", str(category_id))
-            .order("question_order")
             .execute()
         )
 
-        return response.data
+        questions = response.data or []
+
+        for index, question in enumerate(questions, start=1):
+            question["quiz_question_order"] = index
+
+        return questions
     
 
     def get_random_questions(
@@ -460,14 +464,27 @@ class QuizService:
     def get_admin_questions(self, quiz_id):
         response = (
             self.supabase
-            .table("questions")
-            .select("*")
+            .table("quiz_questions")
+            .select(
+                "question_order, questions(*)"
+            )
             .eq("quiz_id", str(quiz_id))
             .order("question_order")
             .execute()
         )
 
-        return response.data
+        result = []
+
+        for row in response.data or []:
+            question = row.get("questions")
+
+            if question:
+                question["quiz_question_order"] = row.get(
+                    "question_order"
+                )
+                result.append(question)
+
+        return result
         
     def delete_question(self, question_id):
         response = (
@@ -486,20 +503,24 @@ class QuizService:
     def reorder_questions(self, quiz_id):
         questions = (
             self.supabase
-            .table("questions")
-            .select("id")
+            .table("quiz_questions")
+            .select("question_id")
             .eq("quiz_id", str(quiz_id))
             .order("question_order")
             .execute()
         )
 
-        for index, question in enumerate(questions.data, start=1):
+        for index, question in enumerate(
+            questions.data or [],
+            start=1,
+        ):
             self.supabase \
-                .table("questions") \
+                .table("quiz_questions") \
                 .update({
                     "question_order": index
                 }) \
-                .eq("id", question["id"]) \
+                .eq("quiz_id", str(quiz_id)) \
+                .eq("question_id", question["question_id"]) \
                 .execute()
     
     def update_question(

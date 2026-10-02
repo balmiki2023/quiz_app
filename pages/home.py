@@ -371,9 +371,12 @@ class QuizListPage:
             self.on_profile,
             self.device_session_id,
             None,
+            questions=questions,
         )
+        
+        print("QUIZ PAGE QUESTIONS:", len(quiz_page.questions))
+        print("FIRST QUESTION:", quiz_page.questions[0] if quiz_page.questions else None)
 
-        quiz_page.questions = questions
 
         self.page.clean()
         self.page.add(quiz_page.build())
@@ -491,7 +494,8 @@ class QuizPage:
         time_limit_seconds,
         on_profile,
         device_session_id,
-        question_count
+        question_count,
+        questions=None,
     ):
         self.page = page
         self.quiz_service = quiz_service
@@ -503,6 +507,11 @@ class QuizPage:
         self.on_profile = on_profile
         self.device_session_id = device_session_id
         self.question_count = question_count
+        self.questions = questions or []
+        
+        print("QUIZPAGE INIT QUESTIONS ARG:", questions)
+        print("QUIZPAGE INIT QUESTIONS COUNT:", len(questions or []))
+        print("QUIZPAGE STORED QUESTIONS:", len(self.questions))
         
         self.remaining_seconds = time_limit_seconds
         self.time_taken_seconds = None
@@ -515,7 +524,6 @@ class QuizPage:
             weight=ft.FontWeight.BOLD,
         )
 
-        self.questions = []
         self.current_question_index = 0
         self.score = 0
         self.selected_answer = None

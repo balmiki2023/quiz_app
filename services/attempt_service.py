@@ -29,7 +29,7 @@ class QuizAttemptService:
             .insert(
                 {
                     "user_id": str(user_id),
-                    "quiz_id": str(quiz_id),
+                    "quiz_id": str(quiz_id) if quiz_id else None,
                     "score": score,
                     "total_questions": total_questions,
                     "correct_answers": correct_answers,
