@@ -13,6 +13,7 @@ class HomePage:
         attempt_service,
         subscription_service,
         on_profile,
+        on_home,
         device_session_id,
     ):
         self.page = page
@@ -20,6 +21,7 @@ class HomePage:
         self.attempt_service = attempt_service
         self.subscription_service = subscription_service
         self.on_profile=on_profile
+        self.on_home=on_home
         self.device_session_id=device_session_id
         
     def open_category(self, category_id, category_name):
@@ -33,6 +35,7 @@ class HomePage:
             category_id,
             category_name,
             self.on_profile,
+            self.on_home,
             self.device_session_id,
         )
         
@@ -163,6 +166,7 @@ class QuizListPage:
         category_id,
         category_name,
         on_profile,
+        on_home,
         device_session_id,
     ):
         self.page = page
@@ -172,6 +176,7 @@ class QuizListPage:
         self.category_id = category_id
         self.category_name = category_name
         self.on_profile = on_profile
+        self.on_home = on_home
         self.device_session_id=device_session_id
         self.question_count = 20
         
@@ -369,6 +374,7 @@ class QuizListPage:
             "Random Quiz",
             None,
             self.on_profile,
+            self.on_home,
             self.device_session_id,
             None,
             questions=questions,
@@ -440,6 +446,7 @@ class QuizListPage:
                 quiz_title,
                 time_limit_seconds,
                 self.on_profile,
+                self.on_home,
                 self.device_session_id,
                 self.question_count
             )
@@ -493,6 +500,7 @@ class QuizPage:
         quiz_title,
         time_limit_seconds,
         on_profile,
+        on_home,
         device_session_id,
         question_count,
         questions=None,
@@ -505,6 +513,7 @@ class QuizPage:
         self.quiz_title = quiz_title
         self.time_limit_seconds = time_limit_seconds
         self.on_profile = on_profile
+        self.on_home = on_home
         self.device_session_id = device_session_id
         self.question_count = question_count
         self.questions = questions or []
@@ -582,7 +591,8 @@ class QuizPage:
         self.page.clean()
         self.page.add(self.build())
         self.page.update()
-
+        
+    
     def next_question_t(self, e):
         print("NEXT QUESTION CLICKED")
         print("CURRENT INDEX:", self.current_question_index)
@@ -840,19 +850,28 @@ class QuizPage:
                 ),
                 ft.Button(
                     "Back to Home",
-                    on_click=self.back_to_home,
+                    on_click= self.back_to_home,
                 ),
             ],
             spacing=15,
         )
 
         self.page.add(
-            ft.Container(
-                content=result_content,
-                width=500,
-                padding=30,
+            ft.Column(
+                [
+                    ft.Container(
+                        content=result_content,
+                        width=500,
+                        padding=30,
+                    )
+                ],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
             )
         )
+
+        self.page.update()
+        
     
     def try_again(self, e=None):
         if self.timer:
@@ -888,28 +907,11 @@ class QuizPage:
         )
         
     def back_to_home(self, e=None):
-        from pages.home import HomePage
-
         if self.timer:
             self.timer.cancel()
             self.timer = None
 
-        self.page.clean()
-        
-        home_page = HomePage(
-            self.page,
-            self.quiz_service,
-            self.attempt_service,
-            self.subscription_service,
-            self.on_profile,
-            self.device_session_id,
-        )
-
-        self.page.add(
-            home_page.build()
-        )
-
-        self.page.update()
+        self.on_home()
     
     def build(self):
         if not self.questions:
@@ -1006,18 +1008,74 @@ class QuizPage:
                     2 if is_selected else 1
                 ),
                 border_radius=10,
-                on_click=lambda e, key=option_key:
-                    self.select_answer(
-                        question,
-                        key,
-                    ),
+                on_click=(
+                    None
+                    if self.selected_answer is not None
+                    else lambda e, key=option_key:
+                        self.select_answer(
+                            question,
+                            key,
+                        )
+                ),
                 ink=True,
             )
 
             controls.append(
                 option_container
             )
+            
+        if self.selected_answer is not None:
+            if self.selected_answer["is_correct"]:
+                controls.append(
+                    ft.Text(
+                        "Correct!",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                    )
+                )
+            else:
+                controls.append(
+                    ft.Text(
+                        "Incorrect!",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                    )
+                )
 
+                correct_option = question.get("correct_option")
+                correct_text = question.get(
+                    f"option_{correct_option.lower()}"
+                )
+
+                controls.append(
+                    ft.Text(
+                        f"Correct answer: "
+                        f"({correct_option}). {correct_text}",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                    )
+                )
+
+            explanation = question.get("explanation")
+
+            if explanation:
+                controls.append(
+                    ft.Text(
+                        explanation,
+                        size=17,
+                    )
+                )
+
+            explanation = question.get("explanation")
+
+            if explanation:
+                controls.append(
+                    ft.Text(
+                        explanation,
+                        size=17,
+                    )
+                )
+        
         controls.append(
             ft.Button(
                 "Next Question",

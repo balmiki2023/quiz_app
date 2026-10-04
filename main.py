@@ -125,6 +125,7 @@ def main(page: ft.Page):
             attempt_service,
             subscription_service,
             show_profile,
+            show_home,
             device_session_id,
         )
 
