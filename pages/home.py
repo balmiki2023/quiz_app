@@ -57,13 +57,16 @@ class HomePage:
                         f"Could not load categories: {error}",
                         color=ft.Colors.RED,
                     ),
-                ]
+                ],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
             )
 
         category_controls = []
 
         for category in categories:
             card_content = ft.Container(
+                width=float("inf"),
                 content=ft.Column(
                     [
                         ft.Text(
@@ -92,34 +95,43 @@ class HomePage:
                 )
             )
 
-        return ft.Column(
-            [
-                ft.Text(
-                    "Quiz App",
-                    size=32,
-                    weight=ft.FontWeight.BOLD,
-                ),
-                ft.Button(
-                    "My Quiz History",
-                    on_click=self.open_history,
-                ),
-                ft.Button(
-                    "Profile",
-                    on_click=self.open_profile,
-                ),
-                ft.Text(
-                    "Choose a Category",
-                    size=22,
-                ),
-                ft.Column(
-                    category_controls,
-                    spacing=10,
-                ),
-            ],
-            spacing=15,
+        return ft.Container(
+            expand=True,
+            width=float("inf"),
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "Quiz App",
+                        size=32,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    ft.Button(
+                        "My Quiz History",
+                        on_click=self.open_history,
+                    ),
+                    ft.Button(
+                        "Profile",
+                        on_click=self.open_profile,
+                    ),
+                    ft.Text(
+                        "Choose a Category",
+                        size=22,
+                    ),
+                    ft.Column(
+                        category_controls,
+                        spacing=10,
+                        width=float("inf"),
+                    ),
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+                width=float("inf"),
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
         )
         
-    def open_history(self, e):
+    def open_history(self, e=None):
         self.page.clean()
 
         from pages.results import ResultsPage
@@ -128,33 +140,17 @@ class HomePage:
             self.page,
             self.attempt_service,
             self.quiz_service,
-            self.build_home,
+            self.on_home,
         )
 
         self.page.add(
             results_page.build()
         )
+
+        self.page.update()
     
     def open_profile(self, e):
         self.on_profile()
-
-    def build_home(self):
-        self.page.clean()
-        
-        print("CREATING HOME PAGE")
-
-
-        home_page = HomePage(
-            self.page,
-            self.quiz_service,
-            self.attempt_service,
-            self.subscription_service,
-            self.on_profile,
-        )
-
-        self.page.add(
-            home_page.build()
-        )
         
 class QuizListPage:
     def __init__(
@@ -180,7 +176,7 @@ class QuizListPage:
         self.device_session_id=device_session_id
         self.question_count = 20
         
-    def go_back(self, e):
+    def on_back(self, e):
         self.page.clean()
 
         home_page = HomePage(
@@ -189,6 +185,7 @@ class QuizListPage:
             self.attempt_service,
             self.subscription_service,
             self.on_profile,
+            self.on_home,
             self.device_session_id,
         )
 
@@ -204,13 +201,15 @@ class QuizListPage:
                 [
                     ft.Button(
                         "← Back",
-                        on_click=self.go_back,
+                        on_click=self.on_back,
                     ),
                     ft.Text(
                         f"Could not load quizzes: {error}",
                         color=ft.Colors.RED,
                     ),
-                ]
+                ],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
             )
 
         quiz_controls = []
@@ -238,6 +237,7 @@ class QuizListPage:
             )
 
             quiz_content = ft.Container(
+                        width=float("inf"),
                         content=ft.Column(
                             [
                                 ft.Text(
@@ -305,39 +305,48 @@ class QuizListPage:
             on_click=self.start_quiz,
         )
 
-        return ft.Column(
-            [
-                ft.Button(
-                    "← Back",
-                    on_click=self.go_back,
-                ),
+        return ft.Container(
+            expand=True,
+            width=float("inf"),
+            content=ft.Column(
+                [
+                    ft.Button(
+                        "← Back",
+                        on_click=self.on_back,
+                    ),
 
-                ft.Text(
-                    self.category_name,
-                    size=28,
-                    weight=ft.FontWeight.BOLD,
-                ),
+                    ft.Text(
+                        self.category_name,
+                        size=28,
+                        weight=ft.FontWeight.BOLD,
+                    ),
 
-                ft.Text(
-                    "How many questions do you want to try?",
-                    size=18,
-                ),
+                    ft.Text(
+                        "How many questions do you want to try?",
+                        size=18,
+                    ),
 
-                question_count_dropdown,
-                
-                start_quiz_button,
+                    question_count_dropdown,
 
-                ft.Text(
-                    "Available Quizzes",
-                    size=20,
-                ),
+                    start_quiz_button,
 
-                ft.Column(
-                    quiz_controls,
-                    spacing=10,
-                ),
-            ],
-            spacing=15,
+                    ft.Text(
+                        "Available Quizzes",
+                        size=20,
+                    ),
+
+                    ft.Column(
+                        quiz_controls,
+                        spacing=10,
+                        width=float("inf"),
+                    ),
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+                width=float("inf"),
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
         )
         
     def question_count_changed(self, e):
@@ -371,12 +380,13 @@ class QuizListPage:
             self.attempt_service,
             self.subscription_service,
             None,
-            "Random Quiz",
+            f"{self.category_name} — Random Quiz",
             None,
             self.on_profile,
             self.on_home,
             self.device_session_id,
             None,
+            category_id=self.category_id,
             questions=questions,
         )
         
@@ -418,8 +428,8 @@ class QuizListPage:
                                 "This quiz is available to Premium members."
                             ),
                             ft.Button(
-                                "Back",
-                                on_click=self.go_back,
+                                "← Back",
+                                on_click=self.on_back,
                             ),
                         ],
                         spacing=15,
@@ -479,8 +489,8 @@ class QuizListPage:
                             color=ft.Colors.RED,
                         ),
                         ft.Button(
-                            "Back",
-                            on_click=self.go_back,
+                            "← Back",
+                            on_click=self.on_back,
                         ),
                     ]
                 )
@@ -503,6 +513,7 @@ class QuizPage:
         on_home,
         device_session_id,
         question_count,
+        category_id=None,
         questions=None,
     ):
         self.page = page
@@ -516,6 +527,7 @@ class QuizPage:
         self.on_home = on_home
         self.device_session_id = device_session_id
         self.question_count = question_count
+        self.category_id = category_id
         self.questions = questions or []
         
         print("QUIZPAGE INIT QUESTIONS ARG:", questions)
@@ -707,6 +719,7 @@ class QuizPage:
                 self.attempt_service.create_attempt(
                     user_id=user_id,
                     quiz_id=self.quiz_id,
+                    category_id=self.category_id,
                     score=self.score,
                     total_questions=len(
                         self.questions
@@ -789,7 +802,6 @@ class QuizPage:
                     self.quiz_title,
                     size=24,
                 ),
-
                 ft.Divider(),
 
                 ft.Text(
@@ -849,7 +861,7 @@ class QuizPage:
                     on_click=self.review_answers,
                 ),
                 ft.Button(
-                    "Back to Home",
+                    "← Back to Home",
                     on_click= self.back_to_home,
                 ),
             ],
@@ -895,16 +907,24 @@ class QuizPage:
 
         from pages.results import ResultsPage
 
+        # Keep the current Results page so we can return to it.
         results_page = ResultsPage(
             self.page,
             self.attempt_service,
             self.quiz_service,
-            self.back_to_home,
+            self.show_result,
         )
+        self.page.update()
 
-        self.page.add(
-            results_page.build()
-        )
+        def back_to_results():
+            self.page.clean()
+            self.page.add(results_page.build())
+            self.page.update()
+
+        results_page.on_history = back_to_results
+
+        self.page.add(results_page.build())
+        self.page.update()
         
     def back_to_home(self, e=None):
         if self.timer:
@@ -918,8 +938,29 @@ class QuizPage:
             try:
                 self.load_questions()
             except Exception as error:
-                
-                return ft.Column(
+                return ft.Container(
+                    expand=True,
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                self.quiz_title,
+                                size=28,
+                                weight=ft.FontWeight.BOLD,
+                            ),
+                            ft.Text(
+                                f"Could not load questions: {error}",
+                                color=ft.Colors.RED,
+                            ),
+                        ],
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True,
+                    ),
+                )
+
+        if not self.questions:
+            return ft.Container(
+                expand=True,
+                content=ft.Column(
                     [
                         ft.Text(
                             self.quiz_title,
@@ -927,26 +968,12 @@ class QuizPage:
                             weight=ft.FontWeight.BOLD,
                         ),
                         ft.Text(
-                            f"Could not load questions: "
-                            f"{error}",
-                            color=ft.Colors.RED,
+                            "This quiz does not have any questions yet."
                         ),
-                    ]
-                )
-
-        if not self.questions:
-            return ft.Column(
-                [
-                    ft.Text(
-                        self.quiz_title,
-                        size=28,
-                        weight=ft.FontWeight.BOLD,
-                    ),
-                    ft.Text(
-                        "This quiz does not have "
-                        "any questions yet."
-                    ),
-                ]
+                    ],
+                    scroll=ft.ScrollMode.AUTO,
+                    expand=True,
+                ),
             )
 
         question = self.questions[
@@ -1092,15 +1119,27 @@ class QuizPage:
                 self.start_timer
             )
             
-        return ft.Column(
-            controls,
-            spacing=15,
+        return ft.Container(
+            expand=True,
+            width=float("inf"),
+            content=ft.Column(
+                controls,
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+                width=float("inf"),
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
         )
     
     def review_answers(self, e=None):
         self.page.clean()
 
         controls = [
+            ft.Button(
+                "← Back to Result",
+                on_click=self.back_to_result,
+            ),
             ft.Text(
                 "Review Answers",
                 size=30,
@@ -1196,18 +1235,32 @@ class QuizPage:
 
         controls.append(
             ft.Button(
-                "Back to Result",
+                "← Back to Result",
                 on_click=self.back_to_result,
             )
         )
 
+        self.page.clean()
+
+        review_content = ft.Column(
+            controls,
+            spacing=15,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+            width=float("inf"),
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+        )
+
         self.page.add(
-            ft.Column(
-                controls,
-                spacing=15,
-                scroll=ft.ScrollMode.AUTO,
+            ft.Container(
+                content=review_content,
+                expand=True,
+                width=float("inf"),
+                padding=20,
             )
         )
+
+        self.page.update()
     
     def back_to_result(self, e=None):
         self.show_result()

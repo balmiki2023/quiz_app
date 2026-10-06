@@ -68,6 +68,30 @@ class QuizService:
 
         return questions    
         
+    def get_questions_by_ids(self, question_ids):
+        if not question_ids:
+            return []
+
+        response = (
+            self.supabase
+            .table("questions")
+            .select("*")
+            .in_("id", question_ids)
+            .execute()
+        )
+
+        questions_by_id = {
+            question["id"]: question
+            for question in (response.data or [])
+        }
+
+        # Preserve the original quiz order.
+        return [
+            questions_by_id[question_id]
+            for question_id in question_ids
+            if question_id in questions_by_id
+        ]
+    
     def create_category(
         self,
         name,

@@ -17,6 +17,7 @@ class QuizAttemptService:
         self,
         user_id,
         quiz_id,
+        category_id,
         score,
         total_questions,
         correct_answers,
@@ -30,6 +31,7 @@ class QuizAttemptService:
                 {
                     "user_id": str(user_id),
                     "quiz_id": str(quiz_id) if quiz_id else None,
+                    "category_id": str(category_id) if category_id else None,
                     "score": score,
                     "total_questions": total_questions,
                     "correct_answers": correct_answers,
