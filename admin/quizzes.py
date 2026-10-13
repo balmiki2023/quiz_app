@@ -16,6 +16,7 @@ class AdminQuizzes:
             label="Category",
             width=400,
         )
+        self.category_dropdown.on_select = self.on_category_change
 
         self.title_field = ft.TextField(
             label="Quiz title",
@@ -60,28 +61,235 @@ class AdminQuizzes:
         
         self.selected_quiz_id = None
         
+        self.selected_question_ids = []        
+        self.category_questions = []
+        self.new_quiz_question_ids = []
+        self.new_quiz_questions_section = None
+        
         self.assigned_questions_section = None
+        self.category_questions_section = ft.Container(
+            content=ft.Text("Select a category to see its questions.")
+        )
 
         self.load_categories()
         
-    def test_create_category_quiz(self):
+    def category_changed(self, e=None):
+        # Clear selections when switching categories.
+        self.selected_question_ids.clear()
+
+        self.category_questions_section.content = (
+            self.build_category_questions()
+        )
+
+        self.page.update()
+
+
+    def build_category_questions(self):
+        category_id = self.category_dropdown.value
+
+        if not category_id:
+            return ft.Text("Select a category to see its questions.")
+
         try:
-            self.message.value = "1. Starting..."
-            self.page.update()
-
-            quiz = self.quiz_service.create_category_quiz("ch_01")
-
-            self.message.value = (
-                f"2. Returned: {quiz}"
+            questions = self.quiz_service.get_admin_questions_by_category(
+                category_id
             )
-            self.page.update()
+
+            if not questions:
+                return ft.Text("No questions found in this category.")
+
+            controls = []
+
+            for index, question in enumerate(questions, start=1):
+                question_id = str(question["id"])
+
+                checkbox = ft.Checkbox(
+                    label="Select question",
+                    value=question_id in self.selected_question_ids,
+                    on_change=lambda e, qid=question_id:
+                        self.toggle_question_selection(
+                            qid,
+                            e.control.value,
+                        ),
+                )
+
+                controls.append(
+                    ft.Card(
+                        content=ft.Container(
+                            content=ft.Column(
+                                [
+                                    ft.Text(
+                                        f"Question {index}",
+                                        weight=ft.FontWeight.BOLD,
+                                    ),
+                                    ft.Text(question["question_text"]),
+                                    checkbox,
+                                ],
+                                spacing=8,
+                            ),
+                            padding=12,
+                        )
+                    )
+                )
+
+            return ft.Column(
+                controls=controls,
+                spacing=10,
+            )
 
         except Exception as error:
             self.message.value = (
-                f"ERROR: {type(error).__name__}: {error}"
+                f"Could not load category questions: {error}"
             )
-            self.page.update()
-            
+            return ft.Text(
+                "Could not load questions. Check the message above."
+            )
+        
+    def on_category_change(self, e=None):
+        category_id = self.category_dropdown.value
+
+        self.category_questions = []
+        self.new_quiz_question_ids = []
+
+        if category_id:
+            self.category_questions = (
+                self.quiz_service.get_admin_questions_by_category(
+                    category_id
+                )
+            )
+
+        if self.new_quiz_questions_section:
+            self.new_quiz_questions_section.content = (
+                self.build_new_quiz_question_picker()
+            )
+
+        self.page.update()
+
+
+    def toggle_new_quiz_question(self, question_id, selected):
+        question_id = str(question_id)
+
+        if selected:
+            if question_id not in self.new_quiz_question_ids:
+                self.new_quiz_question_ids.append(question_id)
+        elif question_id in self.new_quiz_question_ids:
+            self.new_quiz_question_ids.remove(question_id)
+
+        self.new_quiz_questions_section.content = (
+            self.build_new_quiz_question_picker()
+        )
+        self.page.update()
+
+
+    def move_new_quiz_question(self, question_id, direction):
+        ids = self.new_quiz_question_ids
+        index = ids.index(str(question_id))
+        new_index = index + direction
+
+        if not 0 <= new_index < len(ids):
+            return
+
+        ids[index], ids[new_index] = ids[new_index], ids[index]
+
+        self.new_quiz_questions_section.content = (
+            self.build_new_quiz_question_picker()
+        )
+        self.page.update()
+
+
+    def build_new_quiz_question_picker(self):
+        controls = [
+            ft.Text(
+                "Select questions and arrange their order",
+                size=18,
+                weight=ft.FontWeight.BOLD,
+            )
+        ]
+
+        if not self.category_dropdown.value:
+            controls.append(ft.Text("Choose a category first."))
+            return ft.Column(controls, spacing=10)
+
+        if not self.category_questions:
+            controls.append(
+                ft.Text("No questions found in this category.")
+            )
+            return ft.Column(controls, spacing=10)
+
+        controls.append(ft.Text("Available Questions"))
+
+        for question in self.category_questions:
+            qid = str(question["id"])
+
+            controls.append(
+                ft.Card(
+                    content=ft.Container(
+                        padding=10,
+                        content=ft.Column(
+                            [
+                                ft.Text(question["question_text"]),
+                                ft.Checkbox(
+                                    label="Include in quiz",
+                                    value=qid in self.new_quiz_question_ids,
+                                    on_change=lambda e, question_id=qid:
+                                        self.toggle_new_quiz_question(
+                                            question_id,
+                                            e.control.value,
+                                        ),
+                                ),
+                            ],
+                            spacing=5,
+                        ),
+                    )
+                )
+            )
+
+        controls.append(ft.Divider())
+        controls.append(ft.Text("Selected order"))
+
+        for position, qid in enumerate(
+            self.new_quiz_question_ids, start=1
+        ):
+            question = next(
+                q for q in self.category_questions
+                if str(q["id"]) == qid
+            )
+
+            index = position - 1
+
+            controls.append(
+                ft.Row(
+                    [
+                        ft.Text(f"{position}.", width=30),
+                        ft.Text(
+                            question["question_text"],
+                            expand=True,
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.ARROW_UPWARD,
+                            disabled=index == 0,
+                            on_click=lambda e, question_id=qid:
+                                self.move_new_quiz_question(
+                                    question_id, -1
+                                ),
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.ARROW_DOWNWARD,
+                            disabled=(
+                                index == len(self.new_quiz_question_ids) - 1
+                            ),
+                            on_click=lambda e, question_id=qid:
+                                self.move_new_quiz_question(
+                                    question_id, 1
+                                ),
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                )
+            )
+
+        return ft.Column(controls, spacing=10)
+                    
     
     def load_categories(self):
         categories = (
@@ -108,12 +316,11 @@ class AdminQuizzes:
         self.page.add(self.build())
         self.page.update()    
         
+    
     def build_available_questions(self, quiz):
-        questions = (
-            self.quiz_service.get_available_questions_for_quiz(
-                quiz_id=quiz["id"],
-                category_id=quiz["category_id"],
-            )
+        questions = self.quiz_service.get_available_questions_for_quiz(
+            quiz_id=quiz["id"],
+            category_id=quiz["category_id"],
         )
 
         if not questions:
@@ -121,9 +328,26 @@ class AdminQuizzes:
                 "No available questions in this category."
             )
 
-        controls = []
+        controls = [
+            ft.Button(
+                "Add Selected Questions",
+                on_click=lambda e, quiz_id=quiz["id"]:
+                    self.add_selected_questions(quiz_id),
+            )
+        ]
 
         for index, question in enumerate(questions, start=1):
+            question_id = str(question["id"])
+
+            checkbox = ft.Checkbox(
+                label="Select question",
+                value=question_id in self.selected_question_ids,
+                on_change=lambda e, qid=question_id:
+                    self.toggle_question_selection(
+                        qid, e.control.value
+                    ),
+            )
+
             controls.append(
                 ft.Card(
                     content=ft.Container(
@@ -138,16 +362,9 @@ class AdminQuizzes:
                                     question["question_text"],
                                     size=16,
                                 ),
-                                ft.Button(
-                                    "Add to Quiz",
-                                    on_click=lambda e, q=question, quiz_id=quiz["id"]:
-                                        self.add_question_to_quiz(
-                                            quiz_id,
-                                            q["id"],
-                                        ),
-                                ),
+                                checkbox,
                             ],
-                            spacing=5,
+                            spacing=8,
                         ),
                         padding=15,
                     )
@@ -158,6 +375,83 @@ class AdminQuizzes:
             controls,
             spacing=10,
         )
+
+
+    def toggle_question_selection(self, question_id, selected):
+        question_id = str(question_id)
+
+        if selected:
+            if question_id not in self.selected_question_ids:
+                self.selected_question_ids.append(question_id)
+        else:
+            if question_id in self.selected_question_ids:
+                self.selected_question_ids.remove(question_id)
+
+    def add_selected_questions(self, quiz_id):
+        if not self.selected_question_ids:
+            self.message.value = "Select at least one question first."
+            self.page.update()
+            return
+
+        try:
+            # Fetch the questions still available in this quiz's category.
+            available_questions = (
+                self.quiz_service.get_available_questions_for_quiz(
+                    quiz_id=quiz_id,
+                    category_id=next(
+                        q["category_id"]
+                        for q in self.quiz_service.get_admin_quizzes()
+                        if str(q["id"]) == str(quiz_id)
+                    ),
+                )
+            )
+
+            questions_by_id = {
+                str(question["id"]): question
+                for question in available_questions
+            }
+
+            selected_questions = [
+                questions_by_id[question_id]
+                for question_id in self.selected_question_ids
+                if question_id in questions_by_id
+            ]
+
+            assigned = self.quiz_service.get_assigned_questions(quiz_id)
+
+            existing_orders = {
+                int(item["question_order"])
+                for item in assigned
+            }
+
+            added_count = 0
+
+            for question in selected_questions:
+                next_order = 1
+
+                while next_order in existing_orders:
+                    next_order += 1
+
+                self.quiz_service.add_question_to_quiz(
+                    quiz_id=quiz_id,
+                    question_id=question["id"],
+                    question_order=next_order,
+                )
+
+                existing_orders.add(next_order)
+                added_count += 1
+
+            self.selected_question_ids.clear()
+
+            self.message.value = (
+                f"Successfully added {added_count} question(s) to the quiz."
+            )
+
+            self.refresh_question_management()
+
+        except Exception as error:
+            self.message.value = f"Could not add questions: {error}"
+            self.page.update()
         
     
     def add_question_to_quiz(
@@ -205,13 +499,17 @@ class AdminQuizzes:
         self.assigned_questions_section = ft.Container(
             content=self.build_assigned_questions_section()
         )
+        
+        self.new_quiz_questions_section = ft.Container(
+            content=self.build_new_quiz_question_picker(),
+            visible=(
+                self.selected_quiz_id is None
+                and self.editing_quiz_id is None
+            ),
+        )
 
         self.main_column = ft.ListView(
             controls=[
-                ft.Button(
-                    "Test Category Quiz",
-                    on_click=lambda e: self.test_create_category_quiz(),
-                ),
                 ft.Button(
                     "← Back",
                     on_click=self.on_back,
@@ -224,6 +522,13 @@ class AdminQuizzes:
                 ),
 
                 self.category_dropdown,
+                ft.Text(
+                    "Questions in Selected Category",
+                    size=18,
+                    weight=ft.FontWeight.BOLD,
+                ),
+                
+                self.new_quiz_questions_section,
 
                 self.title_field,
 
@@ -238,7 +543,12 @@ class AdminQuizzes:
                 self.published_checkbox,
 
                 ft.Button(
-                    "Save Quiz",
+                    "Create Quiz with Selected Questions",
+                    on_click=self.create_quiz_with_selected_questions,
+                ),
+
+                ft.Button(
+                    "Save Quiz Changes",
                     on_click=self.save_quiz,
                 ),
 
@@ -425,6 +735,7 @@ class AdminQuizzes:
             previous["question_id"],
             previous["question_order"],
         )
+        self.quiz_service.renumber_quiz_questions(quiz_id)
 
         self.refresh_question_management()
 
@@ -455,6 +766,7 @@ class AdminQuizzes:
             next_question["question_id"],
             next_question["question_order"],
         )
+        self.quiz_service.renumber_quiz_questions(quiz_id)
 
         self.refresh_question_management()
     
@@ -468,6 +780,7 @@ class AdminQuizzes:
                 quiz_id,
                 question_id,
             )
+            self.quiz_service.renumber_quiz_questions(quiz_id)
 
             self.message.value = (
                 "Question removed from quiz successfully."
@@ -712,4 +1025,71 @@ class AdminQuizzes:
         except Exception as error:
             self.message.value = str(error)
             self.page.update()
+            
+    def create_quiz_with_selected_questions(self, e=None):
+            category_id = self.category_dropdown.value
+            title = self.title_field.value.strip()
+            description = self.description_field.value.strip()
+            difficulty = self.difficulty_dropdown.value
+
+            if not category_id:
+                self.message.value = "Please select a category."
+                self.page.update()
+                return
+
+            if not title:
+                self.message.value = "Quiz title is required."
+                self.page.update()
+                return
+
+            # This list must contain question IDs in the
+            # exact order you want them saved.
+            question_ids = list(self.new_quiz_question_ids)
+            
+            if not question_ids:
+                self.message.value = "Select at least one question."
+                self.page.update()
+                return
+
+            try:
+                time_limit = int(self.time_limit_field.value)
+
+                self.quiz_service.create_quiz_with_questions(
+                    category_id=category_id,
+                    title=title,
+                    description=description,
+                    difficulty=difficulty,
+                    time_limit_seconds=time_limit,
+                    is_premium=self.premium_checkbox.value,
+                    is_published=self.published_checkbox.value,
+                    question_ids=question_ids,
+                )
+                
+                self.new_quiz_question_ids = []
+                self.category_questions = []
+
+                self.editing_quiz_id = None
+                self.selected_question_ids = []
+
+                self.category_dropdown.value = None
+                self.title_field.value = ""
+                self.description_field.value = ""
+                self.difficulty_dropdown.value = None
+                self.time_limit_field.value = "300"
+                self.premium_checkbox.value = False
+                self.published_checkbox.value = True
+
+                self.message.value = "Quiz created successfully."
+
+                self.page.clean()
+                self.page.add(self.build())
+                self.page.update()
+
+            except ValueError:
+                self.message.value = "Time limit must be a number."
+                self.page.update()
+
+            except Exception as error:
+                self.message.value = str(error)
+                self.page.update()
             

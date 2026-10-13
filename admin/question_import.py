@@ -1,3 +1,15 @@
+import csv
+import io
+import re
+import requests
+
+from urllib.parse import (
+    urlparse,
+    parse_qs,
+    urlencode,
+    urlunparse,
+)
+from urllib.request import Request, urlopen
 import flet as ft
 
 from services.question_import_service import QuestionImportService
@@ -24,6 +36,12 @@ class QuestionImport:
             width=400,
         )
         
+        self.sheet_url_field = ft.TextField(
+            label="Google Sheets URL",
+            hint_text="Paste your Google Sheets link here",
+            width=500,
+        )
+        
         self.new_category_name = ft.TextField(
             label="New category name",
             width=400,
@@ -39,12 +57,12 @@ class QuestionImport:
 
         self.file_picker = ft.FilePicker()
 
+    
     def build(self):
         self.load_categories()
 
         return ft.Column(
-            
-            [
+            controls=[
                 ft.Button(
                     "← Back to Admin Dashboard",
                     on_click=lambda e: self.on_back(),
@@ -57,13 +75,21 @@ class QuestionImport:
                 ),
 
                 ft.Text(
-                    "Import questions from a CSV exported from Google Sheets."
+                    'Import questions from a CSV with headers:\n'
+                    '"question_text","option_a","option_b",'
+                    '"option_c","option_d","correct_option","explanation"'
                 ),
 
                 ft.Divider(),
 
                 self.category_dropdown,
-                
+
+                ft.Text(
+                    "Bulk Import Questions",
+                    size=20,
+                    weight=ft.FontWeight.BOLD,
+                ),
+
                 ft.Text(
                     "Or create a new category",
                     size=18,
@@ -71,7 +97,6 @@ class QuestionImport:
                 ),
 
                 self.new_category_name,
-
                 self.new_category_description,
 
                 ft.Button(
@@ -88,12 +113,21 @@ class QuestionImport:
                     "Import Questions",
                     on_click=self.import_questions,
                 ),
+                
+                self.sheet_url_field,
+
+                ft.Button(
+                    "Import from Google Sheets",
+                    on_click=self.import_questions_from_sheet,
+                ),
+
 
                 self.message,
             ],
             width=600,
             spacing=15,
             scroll=ft.ScrollMode.AUTO,
+            expand=True,
         )
     
     def add_category(self, e=None):
@@ -130,6 +164,138 @@ class QuestionImport:
             self.message.value = str(error)
             self.message.color = ft.Colors.RED
             self.page.update()
+            
+    
+    def _get_google_csv_url(self, sheet_url):
+        """Convert a normal Google Sheets link to a CSV export URL."""
+        parsed = urlparse(sheet_url.strip())
+
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "docs.google.com"
+        ):
+            raise ValueError(
+                "Enter a Google Sheets URL starting with "
+                "https://docs.google.com/spreadsheets/..."
+            )
+
+        parts = parsed.path.strip("/").split("/")
+        query = parse_qs(parsed.query)
+        fragment = parse_qs(parsed.fragment)
+
+        gid = (
+            query.get("gid")
+            or fragment.get("gid")
+            or [""]
+        )[0]
+
+        if (
+            len(parts) < 4
+            or parts[0] != "spreadsheets"
+            or parts[1] != "d"
+        ):
+            raise ValueError("This does not look like a Google Sheets link.")
+
+        # Published-to-web links, such as /spreadsheets/d/e/.../pub
+        if parts[2] == "e":
+            if parts[-1] != "pub":
+                raise ValueError(
+                    "For a published sheet, use its published CSV link."
+                )
+
+            params = {
+                key: values[0]
+                for key, values in query.items()
+                if values
+            }
+            params["output"] = "csv"
+
+            if gid:
+                params["gid"] = gid
+
+            return urlunparse((
+                "https",
+                "docs.google.com",
+                parsed.path,
+                "",
+                urlencode(params),
+                "",
+            ))
+
+        # Normal sharing/edit link.
+        sheet_id = parts[2]
+        params = {"format": "csv"}
+
+        if gid:
+            params["gid"] = gid
+
+        return urlunparse((
+            "https",
+            "docs.google.com",
+            f"/spreadsheets/d/{sheet_id}/export",
+            "",
+            urlencode(params),
+            "",
+        ))
+
+    
+    def import_questions_from_sheet(self, e=None):
+        sheet_url = (self.sheet_url_field.value or "").strip()
+
+        if not sheet_url:
+            self.message.value = "Please enter a Google Sheets URL."
+            self.message.color = ft.Colors.RED
+            self.page.update()
+            return
+
+        try:
+            match = re.search(
+                r"/spreadsheets/d/([a-zA-Z0-9_-]+)",
+                sheet_url,
+            )
+
+            if not match:
+                raise ValueError("Invalid Google Sheets URL.")
+
+            spreadsheet_id = match.group(1)
+
+            gid_match = re.search(r"[?&#]gid=(\d+)", sheet_url)
+            gid = gid_match.group(1) if gid_match else "0"
+
+            export_url = (
+                f"https://docs.google.com/spreadsheets/d/"
+                f"{spreadsheet_id}/export?format=csv&gid={gid}"
+            )
+
+            response = requests.get(export_url, timeout=30)
+            response.raise_for_status()
+
+            # Confirm that Google returned CSV rather than an HTML
+            # login or permission page.
+            content_type = response.headers.get("Content-Type", "")
+            if "text/html" in content_type.lower():
+                raise ValueError(
+                    "The sheet is not publicly accessible. "
+                    "Check its sharing permissions."
+                )
+
+            csv_text = response.content.decode("utf-8-sig")
+
+            # Validate that the response contains usable CSV data.
+            rows = list(csv.reader(io.StringIO(csv_text)))
+            if len(rows) < 2:
+                raise ValueError(
+                    "The sheet must contain a header and at least one question."
+                )
+
+            # Reuse the existing CSV import pipeline.
+            self.import_questions(e=None, csv_text=csv_text)
+
+        except Exception as error:
+            self.message.value = f"Google Sheets import failed: {error}"
+            self.message.color = ft.Colors.RED
+            self.page.update()
+
     
     def load_categories(self):
         categories = self.quiz_service.get_categories()
@@ -163,7 +329,7 @@ class QuestionImport:
         self.page.update()
         
         
-    def import_questions(self, e=None):
+    def import_questions(self, e=None, csv_text=None):
         category_id = self.category_dropdown.value
 
         if not category_id:
@@ -172,34 +338,35 @@ class QuestionImport:
             self.page.update()
             return
 
-        if not self.selected_file:
-            self.message.value = "Please select a CSV file."
-            self.message.color = ft.Colors.RED
-            self.page.update()
-            return
+        if csv_text is None:
+            if not self.selected_file:
+                self.message.value = "Please select a CSV file."
+                self.message.color = ft.Colors.RED
+                self.page.update()
+                return
+
+            try:
+                csv_text = self.selected_file.bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                self.message.value = "The CSV file must use UTF-8 encoding."
+                self.message.color = ft.Colors.RED
+                self.page.update()
+                return
 
         try:
-            csv_text = self.selected_file.bytes.decode(
-                "utf-8-sig"
-            )
-
-            imported_questions = (
-                self.import_service.import_csv(
-                    csv_text,
-                    category_id,
-                )
+            imported_questions = self.import_service.import_csv(
+                csv_text,
+                category_id,
             )
 
             self.message.value = (
-                f"Successfully imported "
-                f"{len(imported_questions)} questions."
+                f"Successfully imported {len(imported_questions)} questions."
             )
             self.message.color = ft.Colors.GREEN
 
-            self.page.update()
-
         except Exception as error:
-            self.message.value = str(error)
+            self.message.value = f"Import failed: {error}"
             self.message.color = ft.Colors.RED
 
+        finally:
             self.page.update()

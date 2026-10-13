@@ -629,6 +629,72 @@ class QuizService:
         )
 
         return response.data
+    
+    def create_quiz_with_questions(
+            self,
+            category_id,
+            title,
+            description,
+            difficulty,
+            time_limit_seconds,
+            is_premium,
+            is_published,
+            question_ids,
+        ):
+            result = self.supabase.rpc(
+                "create_quiz_with_questions",
+                {
+                    "p_category_id": str(category_id),
+                    "p_title": title,
+                    "p_description": description or None,
+                    "p_difficulty": difficulty,
+                    "p_time_limit_seconds": time_limit_seconds,
+                    "p_is_premium": is_premium,
+                    "p_is_published": is_published,
+                    "p_question_ids": [str(qid) for qid in question_ids],
+                },
+            ).execute()
+    
+            return result.data
+    
+    
+    def renumber_quiz_questions(self, quiz_id):
+        assigned = self.get_assigned_questions(quiz_id)
+
+        if not assigned:
+            return
+
+        # Move all rows to unique temporary positions first.
+        # This avoids conflicts with the unique (quiz_id, question_order) constraint.
+        highest_order = max(
+            int(item["question_order"]) for item in assigned
+        )
+        temporary_base = highest_order + len(assigned) + 1000
+
+        for index, item in enumerate(assigned, start=1):
+            (
+                self.supabase
+                .table("quiz_questions")
+                .update({
+                    "question_order": temporary_base + index
+                })
+                .eq("quiz_id", str(quiz_id))
+                .eq("question_id", str(item["question_id"]))
+                .execute()
+            )
+
+        # Assign consecutive order numbers.
+        for index, item in enumerate(assigned, start=1):
+            (
+                self.supabase
+                .table("quiz_questions")
+                .update({
+                    "question_order": index
+                })
+                .eq("quiz_id", str(quiz_id))
+                .eq("question_id", str(item["question_id"]))
+                .execute()
+            )
         
     def get_available_questions_for_quiz(
         self,
