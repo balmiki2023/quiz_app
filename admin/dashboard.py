@@ -5,7 +5,6 @@ from admin.quizzes import AdminQuizzes
 from admin.questions import AdminQuestions
 from admin.question_import import QuestionImport
 
-
 class AdminDashboard:
     def __init__(
         self,

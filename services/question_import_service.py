@@ -1,7 +1,6 @@
 import csv
 import io
 
-
 class QuestionImportService:
     REQUIRED_COLUMNS = [
         "question_text",

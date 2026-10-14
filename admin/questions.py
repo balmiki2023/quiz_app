@@ -1,6 +1,5 @@
 import flet as ft
 
-
 class AdminQuestions:
     def __init__(
         self,

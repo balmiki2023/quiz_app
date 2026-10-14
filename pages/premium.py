@@ -1,6 +1,5 @@
 import flet as ft
 
-
 class PremiumPage:
     def __init__(
         self,

@@ -1,6 +1,5 @@
 import flet as ft
 
-
 class AdminQuizzes:
     def __init__(
         self,
@@ -83,7 +82,6 @@ class AdminQuizzes:
 
         self.page.update()
 
-
     def build_category_questions(self):
         category_id = self.category_dropdown.value
 
@@ -165,7 +163,6 @@ class AdminQuizzes:
 
         self.page.update()
 
-
     def toggle_new_quiz_question(self, question_id, selected):
         question_id = str(question_id)
 
@@ -179,7 +176,6 @@ class AdminQuizzes:
             self.build_new_quiz_question_picker()
         )
         self.page.update()
-
 
     def move_new_quiz_question(self, question_id, direction):
         ids = self.new_quiz_question_ids
@@ -195,7 +191,6 @@ class AdminQuizzes:
             self.build_new_quiz_question_picker()
         )
         self.page.update()
-
 
     def build_new_quiz_question_picker(self):
         controls = [
@@ -376,7 +371,6 @@ class AdminQuizzes:
             spacing=10,
         )
 
-
     def toggle_question_selection(self, question_id, selected):
         question_id = str(question_id)
 
@@ -494,7 +488,6 @@ class AdminQuizzes:
             self.message.value = str(error)
             self.page.update()
 
-
     def build(self):
         self.assigned_questions_section = ft.Container(
             content=self.build_assigned_questions_section()
@@ -572,9 +565,6 @@ class AdminQuizzes:
         )
 
         return self.main_column
-
-
-
 
     def build_quiz_list(self):
         quizzes = self.quiz_service.get_quizzes()

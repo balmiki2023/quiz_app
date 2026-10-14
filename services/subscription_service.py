@@ -2,7 +2,6 @@ import uuid
 
 from supabase import Client
 
-
 class SubscriptionService:
     def __init__(self, supabase: Client):
         self.supabase = supabase
@@ -48,7 +47,6 @@ class SubscriptionService:
         return str(uuid.uuid4())
 
     def claim_device_session(self, device_session_id):
-        print("CLAIMING DEVICE:", device_session_id)
 
         response = self.supabase.rpc(
             "claim_subscription_session",
@@ -56,8 +54,6 @@ class SubscriptionService:
                 "target_device_session_id": device_session_id,
             },
         ).execute()
-
-        print("CLAIM RESULT:", response.data)
 
         return response.data
         

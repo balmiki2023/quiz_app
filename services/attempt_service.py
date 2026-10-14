@@ -1,6 +1,5 @@
 from supabase import Client
 
-
 class QuizAttemptService:
     def __init__(self, supabase: Client):
         self.supabase = supabase
@@ -39,14 +38,12 @@ class QuizAttemptService:
                     "answers": answers or [],
                 }
             )
+            .select("*")
             .execute()
         )
 
-        stats_response = (
-            self.supabase
-            .rpc("update_question_statistics")
-            .execute()
-        )
+        self.supabase.rpc("update_question_statistics").execute()
+        return response.data[0] if response.data else None
 
     def save_answer(
         self,

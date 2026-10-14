@@ -5,7 +5,6 @@ from admin.dashboard import AdminDashboard
 from services.auth import AuthService
 from services.subscription_service import SubscriptionService
 
-
 class ProfilePage:
     def __init__(
         self,

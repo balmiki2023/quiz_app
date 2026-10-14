@@ -3,7 +3,6 @@ from typing import Optional
 from uuid import UUID
 from datetime import datetime
 
-
 @dataclass
 class Category:
     id: UUID
@@ -13,7 +12,6 @@ class Category:
     is_premium: bool = False
     is_published: bool = True
     created_at: Optional[datetime] = None
-
 
 @dataclass
 class Quiz:
@@ -27,7 +25,6 @@ class Quiz:
     time_limit_seconds: Optional[int] = None
     created_at: Optional[datetime] = None
 
-
 @dataclass
 class Question:
     id: UUID
@@ -36,7 +33,6 @@ class Question:
     explanation: Optional[str] = None
     question_order: int = 0
     created_at: Optional[datetime] = None
-
 
 @dataclass
 class QuizAnswer:

@@ -14,7 +14,6 @@ import flet as ft
 
 from services.question_import_service import QuestionImportService
 
-
 class QuestionImport:
     def __init__(
         self,
@@ -120,7 +119,6 @@ class QuestionImport:
                     "Import from Google Sheets",
                     on_click=self.import_questions_from_sheet,
                 ),
-
 
                 self.message,
             ],
