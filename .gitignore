@@ -1,4 +1,29 @@
-.env
+
+# Generated build files
+build/
+dist/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Python cache and virtual environments
 __pycache__/
+*.py[cod]
 .venv/
+venv/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+#git token
 git_token_linux
