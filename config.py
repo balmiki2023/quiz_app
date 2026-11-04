@@ -42,6 +42,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL") or PUBLIC_SUPABASE_URL
 SUPABASE_KEY = os.getenv("SUPABASE_KEY") or PUBLIC_SUPABASE_KEY
 
 if not SUPABASE_URL or not SUPABASE_KEY:
+    checked_paths = ", ".join(
+        str(path) for path in _environment_file_candidates()
+    )
     raise RuntimeError(
         "Supabase configuration is missing. For development, provide a .env "
         "file with SUPABASE_URL and SUPABASE_KEY. For a public release, set "

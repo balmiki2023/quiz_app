@@ -2,9 +2,7 @@ import os
 import platform
 import uuid
 
-
 APP_NAME = "QuizApp"
-
 
 def _get_storage_dir():
     system = platform.system()
@@ -29,7 +27,6 @@ def _get_storage_dir():
         APP_NAME,
     )
 
-
 def _get_device_file():
     storage_dir = _get_storage_dir()
     os.makedirs(storage_dir, exist_ok=True)
@@ -38,7 +35,6 @@ def _get_device_file():
         storage_dir,
         "device.json",
     )
-
 
 def _load_device_data():
     path = _get_device_file()
@@ -52,13 +48,11 @@ def _load_device_data():
     except (OSError, ValueError):
         return {}
 
-
 def _save_device_data(data):
     path = _get_device_file()
 
     with open(path, "w", encoding="utf-8") as file:
         __import__("json").dump(data, file)
-
 
 def get_device_session_id():
     data = _load_device_data()
@@ -76,12 +70,10 @@ def get_device_session_id():
 
     return device_session_id
 
-
 def is_device_associated():
     data = _load_device_data()
 
     return data.get("device_associated", False)
-
 
 def mark_device_associated():
     data = _load_device_data()

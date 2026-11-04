@@ -1,6 +1,5 @@
 from supabase import Client
 
-
 class AdminService:
     def __init__(self, supabase: Client):
         self.supabase = supabase

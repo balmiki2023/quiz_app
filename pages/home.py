@@ -4,7 +4,6 @@ import asyncio
 from services.quiz_service import QuizService
 from services.subscription_service import SubscriptionService
 
-
 class HomePage:
     def __init__(
         self,
@@ -44,7 +43,6 @@ class HomePage:
         )
         
         self.page.update()
-
 
     def build(self):
         try:
@@ -230,11 +228,6 @@ class QuizListPage:
                 if quiz.get("is_premium")
                 else "Free"
             )
-            print("QUIZ:",
-                quiz["title"],
-                "IS PREMIUM:",
-                quiz.get("is_premium"),
-            )
 
             quiz_content = ft.Container(
                         width=float("inf"),
@@ -350,8 +343,6 @@ class QuizListPage:
         )
         
     def question_count_changed(self, e):
-        print("DROPDOWN EVENT FIRED")
-        print("SELECTED VALUE:", e.control.value)
 
         if e.control.value == "all":
             self.question_count = None
@@ -359,19 +350,14 @@ class QuizListPage:
             self.question_count = int(e.control.value)
             
     def start_quiz(self, e):
-        print("START QUIZ CLICKED")
-        print("QUESTION COUNT:", self.question_count)
-        print("CATEGORY ID:", self.category_id)
 
         questions = self.quiz_service.get_random_questions(
             self.category_id,
             self.question_count,
         )
 
-        print("QUESTIONS FOUND:", len(questions))
-
         if not questions:
-            print("NO QUESTIONS FOUND")
+
             return
 
         quiz_page = QuizPage(
@@ -390,9 +376,6 @@ class QuizListPage:
             questions=questions,
         )
         
-        print("QUIZ PAGE QUESTIONS:", len(quiz_page.questions))
-        print("FIRST QUESTION:", quiz_page.questions[0] if quiz_page.questions else None)
-
 
         self.page.clean()
         self.page.add(quiz_page.build())
@@ -440,10 +423,6 @@ class QuizListPage:
                 return
 
         try:
-            print("OPEN QUIZ STARTED")
-            print("QUIZ ID:", quiz_id)
-            print("QUIZ TITLE:", quiz_title)
-            print("TIME LIMIT:", time_limit_seconds)
 
             self.page.clean()
 
@@ -461,18 +440,11 @@ class QuizListPage:
                 self.question_count
             )
 
-            print("QUIZ PAGE CREATED")
-
             content = quiz_page.build()
-
-            print("QUIZ PAGE BUILT")
 
             self.page.add(content)
 
-            print("QUIZ PAGE ADDED")
-
         except Exception as error:
-            print("OPEN QUIZ ERROR:", repr(error))
 
             self.page.clean()
 
@@ -530,9 +502,7 @@ class QuizPage:
         self.category_id = category_id
         self.questions = questions or []
         
-        print("QUIZPAGE INIT QUESTIONS ARG:", questions)
-        print("QUIZPAGE INIT QUESTIONS COUNT:", len(questions or []))
-        print("QUIZPAGE STORED QUESTIONS:", len(self.questions))
+
         
         self.remaining_seconds = time_limit_seconds
         self.time_taken_seconds = None
@@ -606,25 +576,17 @@ class QuizPage:
         
     
     def next_question_t(self, e):
-        print("NEXT QUESTION CLICKED")
-        print("CURRENT INDEX:", self.current_question_index)
-        print("TOTAL QUESTIONS:", len(self.questions))
 
         if not self.questions:
-            print("NO QUESTIONS!")
+
             return
 
         if self.current_question_index >= len(self.questions) - 1:
-            print("LAST QUESTION - CALLING SAVE_ATTEMPT")
+
             self.save_attempt()
             return
 
         self.current_question_index += 1
-
-        print(
-            "MOVING TO QUESTION:",
-            self.current_question_index
-        )
 
         self.render_question()
         

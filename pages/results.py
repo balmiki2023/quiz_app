@@ -1,6 +1,5 @@
 import flet as ft
 
-
 class ResultsPage:
     def __init__(
         self,
@@ -56,11 +55,9 @@ class ResultsPage:
                 if category_name:
                     return f"{category_name} — Random Quiz"
 
-        except Exception as error:
-            print(
-                "RANDOM QUIZ TITLE ERROR:",
-                error,
-            )
+        except Exception:
+            # A missing category label should not prevent displaying the result.
+            pass
 
         return "Random Quiz"
     
@@ -562,7 +559,6 @@ class ResultsPage:
 
     def go_back(self, e=None):
         self.on_back()
-
 
     def back_to_history(self, e=None):
         self.page.clean()

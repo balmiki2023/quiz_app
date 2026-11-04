@@ -1,6 +1,5 @@
 import flet as ft
 
-
 class AdminCategories:
     def __init__(
         self,

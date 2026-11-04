@@ -1,6 +1,5 @@
 from supabase import Client
 
-
 class QuizService:
     def __init__(self, supabase: Client):
         self.supabase = supabase
@@ -524,8 +523,6 @@ class QuizService:
             .select("id")
             .execute()
         )
-
-        print("DELETE RESPONSE:", response.data)
 
         return response.data
         

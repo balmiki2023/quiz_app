@@ -2,7 +2,6 @@ import flet as ft
 
 from services.auth import AuthService
 
-
 class RegisterPage:
     def __init__(
         self,
