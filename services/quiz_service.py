@@ -21,7 +21,10 @@ class QuizService:
         query = (
             self.supabase
             .table("quizzes")
-            .select("*")
+            .select(
+                "id, title, description, difficulty, "
+                "time_limit_seconds, is_premium"
+            )
             .eq("is_published", True)
         )
 
@@ -426,26 +429,28 @@ class QuizService:
     def get_random_questions(
         self,
         category_id,
-        limit=20,
+        num_questions_fetched=30,
+        num_questions_show=20,
     ):
         response = (
             self.supabase
             .table("questions")
             .select("*")
             .eq("category_id", str(category_id))
+            .limit(num_questions_fetched)
             .execute()
         )
 
         questions = response.data or []
 
-        if len(questions) <= limit:
+        if len(questions) <= num_questions_show:
             return questions
 
         import random
 
         return random.sample(
             questions,
-            limit,
+            num_questions_show,
         )
 
     

@@ -111,7 +111,13 @@ def main(page: ft.Page):
                             color=ft.Colors.RED,
                             size=18,
                         ),
+                        ft.Button(
+                            "← Back",
+                            on_click=show_login,
+                        ),
+                        
                     ],
+
                     alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 )
