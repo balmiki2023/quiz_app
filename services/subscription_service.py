@@ -58,6 +58,16 @@ class SubscriptionService:
         return response.data
         
     def claim_device_user(self, device_session_id):
+
+        # Retrieve the current session.
+        # This also refreshes an expired access token.
+        session = self.supabase.auth.get_session()
+
+        if session is None:
+            raise Exception(
+                "No active Supabase session. Please log in again."
+            )
+
         response = self.supabase.rpc(
             "claim_device_user",
             {

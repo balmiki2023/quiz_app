@@ -4,16 +4,19 @@ class ResultsPage:
     def __init__(
         self,
         page,
-        attempt_service,
         quiz_service,
+        local_db,
         on_back,
         on_history_back=None,
     ):
         self.page = page
-        self.attempt_service = attempt_service
         self.quiz_service = quiz_service
+        self.local_db = local_db
         self.on_back = on_back
         self.on_history_back = on_history_back
+        self.review_back_callback = None
+
+        self.current_page = 0
         
     def get_random_quiz_title(self, attempt):
         try:
@@ -66,7 +69,7 @@ class ResultsPage:
             attempt_id = attempt["id"]
 
             full_attempt = (
-                self.attempt_service
+                self.local_db
                 .get_attempt(attempt_id)
             )
 
@@ -127,8 +130,12 @@ class ResultsPage:
 
             controls = [
                 ft.Button(
-                    "← Back to History",
-                    on_click=self.back_to_history,
+                    "← Back",
+                    on_click=(
+                        self.review_back_callback
+                        if self.review_back_callback
+                        else self.back_to_history
+                    ),
                 ),
 
                 ft.Text(
@@ -180,21 +187,10 @@ class ResultsPage:
                     )
 
                     selected_answer_text = (
-                        f"{selected_option}. "
                         f"{option_text}"
                     )
                 else:
                     selected_answer_text = "Not answered"
-
-                status = (
-                    "Correct"
-                    if is_correct
-                    else "Incorrect"
-                )
-
-                explanation = question.get(
-                    "explanation"
-                )
 
                 question_controls = [
                     ft.Text(
@@ -203,17 +199,39 @@ class ResultsPage:
                         size=18,
                         weight=ft.FontWeight.BOLD,
                     ),
-
-                    ft.Text(
-                        f"Your answer: "
-                        f"{selected_answer_text}"
-                    ),
-
-                    ft.Text(
-                        f"Status: {status}"
+                    ft.Row(
+                        controls=[
+                            ft.Text(selected_answer_text,
+                                    color=(
+                                        ft.Colors.GREY_600
+                                        if selected_option is None
+                                        else ft.Colors.BLACK
+                                    ),
+                            ),
+                            *(
+                                [
+                                    ft.Icon(
+                                        ft.Icons.CHECK_CIRCLE
+                                        if is_correct
+                                        else ft.Icons.CANCEL,
+                                        color=(
+                                            ft.Colors.GREEN
+                                            if is_correct
+                                            else ft.Colors.RED
+                                        ),
+                                    )
+                                ]
+                                if selected_option is not None
+                                else []
+                            ),
+                        ]
                     ),
                 ]
 
+                explanation = question.get(
+                                    "explanation"
+                                )
+                
                 if (
                     selected_option is not None
                     and explanation
@@ -238,6 +256,16 @@ class ResultsPage:
                 )
 
             self.page.clean()
+            controls.append(
+                ft.Button(
+                    "← Back",
+                    on_click=(
+                        self.review_back_callback
+                        if self.review_back_callback
+                        else self.back_to_history
+                    ),
+                )
+            )
 
             review_content = ft.Column(
                 controls,
@@ -293,83 +321,30 @@ class ResultsPage:
             offset=0,
             duration=0,
         )
+
+    def previous_page(self, e=None):
+        if self.current_page > 0:
+            self.current_page -= 1
+            self.page.clean()
+            self.page.add(self.build())
+            self.page.update()
+
+
+    def next_page(self, e=None):
+        self.current_page += 1
+        self.page.clean()
+        self.page.add(self.build())
+        self.page.update()
     
     def build(self):
         try:
-            user_id = (
-                self.attempt_service
-                .get_current_user_id()
+            attempts = self.local_db.get_user_attempts(
+                page=self.current_page,
+                page_size=11,
             )
 
-            if not user_id:
-                return ft.Column(
-                    [
-                        ft.Text(
-                            "You are not logged in.",
-                            color=ft.Colors.RED,
-                        )
-                    ]
-                )
-
-            # 1. Load all attempts with ONE query
-            attempts = (
-                self.attempt_service
-                .get_user_attempts(user_id)
-            )
-
-            # 2. Load categories ONCE
-            categories_response = (
-                self.quiz_service.supabase
-                .table("categories")
-                .select("id, name")
-                .execute()
-            )
-
-            categories = (
-                categories_response.data or []
-            )
-
-            category_map = {
-                str(category["id"]): category["name"]
-                for category in categories
-            }
-
-            # 3. Collect question IDs only for old
-            #    random attempts that have no category_id.
-            legacy_question_ids = set()
-
-            for attempt in attempts:
-                if attempt.get("quizzes"):
-                    continue
-
-                if attempt.get("category_id"):
-                    continue
-
-                answers = attempt.get("answers") or []
-
-                for answer in answers:
-                    question_id = answer.get("question_id")
-
-                    if question_id:
-                        legacy_question_ids.add(
-                            str(question_id)
-                        )
-
-            # 4. One batch query for legacy random attempts
-            legacy_questions = {}
-
-            if legacy_question_ids:
-                questions = (
-                    self.quiz_service
-                    .get_questions_by_ids(
-                        list(legacy_question_ids)
-                    )
-                )
-
-                legacy_questions = {
-                    str(question["id"]): question
-                    for question in questions
-                }
+            has_next_page = len(attempts) > 10
+            attempts = attempts[:10]
 
         except Exception as error:
             return ft.Column(
@@ -403,148 +378,101 @@ class ResultsPage:
             controls.append(
                 ft.Text(
                     "You haven't completed any quizzes yet."
+
                 )
             )
+
+        history_cards = []
 
         for attempt in attempts:
-            quiz_data = attempt.get("quizzes")
 
-            # Normal quiz
-            if quiz_data:
-                quiz_title = quiz_data.get(
-                    "title",
-                    "Unknown Quiz",
-                )
+            # Get quiz title
+            quiz_id = attempt.get("quiz_id")
 
-            # Random quiz
-            else:
-                category_id = attempt.get(
-                    "category_id"
-                )
-
-                # New random attempts
-                if category_id:
-                    category_name = category_map.get(
-                        str(category_id),
-                        "Unknown Category",
-                    )
-
-                    quiz_title = (
-                        f"{category_name} — Random Quiz"
-                    )
-
-                # Old random attempts
-                else:
-                    category_name = None
-
-                    answers = (
-                        attempt.get("answers") or []
-                    )
-
-                    for answer in answers:
-                        question_id = answer.get(
-                            "question_id"
-                        )
-
-                        if not question_id:
-                            continue
-
-                        question = legacy_questions.get(
-                            str(question_id)
-                        )
-
-                        if question:
-                            category_id = question.get(
-                                "category_id"
-                            )
-
-                            if category_id:
-                                category_name = (
-                                    category_map.get(
-                                        str(category_id)
-                                    )
-                                )
-
-                                if category_name:
-                                    break
-
-                    if category_name:
-                        quiz_title = (
-                            f"{category_name} — Random Quiz"
-                        )
-                    else:
-                        quiz_title = "Random Quiz"
-
-            score = attempt.get(
-                "score",
-                0,
+            quiz_title = attempt.get("quiz_title") or (
+                "Random Quiz"
+                if not attempt.get("quiz_id")
+                else "Unknown Quiz"
             )
 
-            total = attempt.get(
-                "total_questions",
-                0,
-            )
+            score = attempt.get("score", 0)
+            total = attempt.get("total_questions", 0)
+            correct = attempt.get("correct_answers", 0)
 
-            correct = attempt.get(
-                "correct_answers",
-                0,
-            )
-
-            completed_at = attempt.get(
-                "completed_at",
-                "",
-            )
+            completed_at = attempt.get("completed_at", "")
 
             percentage = 0
 
             if total:
-                percentage = round(
-                    (correct / total) * 100
-                )
+                percentage = round((correct / total) * 100)
 
-            controls.append(
-                ft.Card(
-                    content=ft.Container(
-                        on_click=lambda e, a=attempt:
-                            self.review_attempt(a),
-                        ink=True,
-                        content=ft.Column(
-                            [
-                                ft.Text(
-                                    quiz_title,
-                                    size=20,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                                ft.Text(
-                                    f"Score: {score} / "
-                                    f"{total} "
-                                    f"[{percentage}]%",
-                                ),
-                                ft.Text(
-                                    (
-                                        f"Time taken: "
-                                        f"{attempt['time_taken_seconds'] // 60}:"
-                                        f"{attempt['time_taken_seconds'] % 60:02d}"
-                                    )
-                                    if attempt.get(
-                                        "time_taken_seconds"
-                                    ) is not None
-                                    else "Time taken: N/A",
-                                ),
-                                ft.Text(
-                                    f"Correct answers: {correct}",
-                                ),
-                                ft.Text(
-                                    f"Completed: {completed_at}",
-                                ),
-                            ],
-                            spacing=5,
-                        ),
-                        padding=15,
-                    )
+            time_taken = attempt.get("time_taken_seconds")
+
+            if time_taken is not None:
+                minutes = time_taken // 60
+                seconds = time_taken % 60
+                time_text = f"Time taken: {minutes}:{seconds:02d}"
+            else:
+                time_text = "Time taken: N/A"
+
+            history_cards.append(
+            ft.Card(
+                content=ft.Container(
+                    on_click=lambda e, a=attempt: self.review_attempt(a),
+                    ink=True,
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                quiz_title,
+                                size=18,
+                                weight=ft.FontWeight.BOLD,
+                            ),
+                            ft.Text(f"Score: {score} / {total} [{percentage}%]"),
+                            ft.Text(time_text),
+                            ft.Text(f"Completed: {completed_at}"),
+                        ],
+                        spacing=5,
+                    ),
+                    padding=15,
                 )
             )
+        )
 
+        controls.append(
+            ft.ResponsiveRow(
+                controls=[
+                    ft.Container(
+                        content=card,
+                        col={
+                            "xs": 12,  # Mobile: full width
+                            "md": 6,   # Tablet and desktop: half width
+                        },
+                    )
+                    for card in history_cards
+                ],
+                spacing=15,
+                run_spacing=15,
+            )
+        )
+
+        controls.append(
+            ft.Row(
+                [
+                    ft.Button(
+                        "Previous",
+                        disabled=self.current_page == 0,
+                        on_click=self.previous_page,
+                    ),
+                    ft.Text(f"Page {self.current_page + 1}"),
+                    ft.Button(
+                        "Next",
+                        disabled=not has_next_page,
+                        on_click=self.next_page,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+            )
+        )
         return ft.Container(
             expand=True,
             width=float("inf"),

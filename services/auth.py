@@ -30,20 +30,6 @@ class AuthService:
             "password": password,
         })
 
-    def login_t(
-        self,
-        email: str,
-        password: str,
-    ):
-        response = self.supabase.auth.sign_in_with_password(
-            {
-                "email": email,
-                "password": password,
-            }
-        )
-
-        return response
-
     def logout(self):
         self.supabase.auth.sign_out()
 

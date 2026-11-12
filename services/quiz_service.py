@@ -93,6 +93,23 @@ class QuizService:
             for question_id in question_ids
             if question_id in questions_by_id
         ]
+
+    def get_question_correct_rates(self, question_ids):
+        if not question_ids:
+            return {}
+
+        response = (
+            self.supabase
+            .table("question_statistics")
+            .select("question_id, correct_rate")
+            .in_("question_id", question_ids)
+            .execute()
+        )
+
+        return {
+            row["question_id"]: row["correct_rate"]
+            for row in (response.data or [])
+        }
     
     def create_category(
         self,
@@ -735,3 +752,119 @@ class QuizService:
         return response.data
         
     
+    def sync_pending_question_statistics(self, local_db):
+        """Send pending first-attempt statistics in one batch."""
+
+        pending = local_db.get_pending_question_statistics()
+
+        if not pending:
+            print("QUESTION STATISTICS SYNC: 0/0 questions processed")
+            return 0
+
+        items = [
+            {
+                "question_id": str(item["question_id"]),
+                "is_correct": bool(item["is_correct"]),
+            }
+            for item in pending
+        ]
+
+        try:
+            response = self.supabase.rpc(
+                "sync_question_first_attempts_batch",
+                {
+                    "p_items": items,
+                },
+            ).execute()
+
+            synced_count = response.data
+
+            if synced_count != len(pending):
+                raise Exception(
+                    f"Expected {len(pending)} records, "
+                    f"but Supabase processed {synced_count}"
+                )
+
+            for item in pending:
+                local_db.mark_question_statistics_synced(
+                    item["question_id"]
+                )
+
+            print(
+                f"QUESTION STATISTICS SYNC: "
+                f"{synced_count}/{len(pending)} questions processed"
+            )
+
+            return synced_count
+
+        except Exception as error:
+            print("QUESTION STATISTICS SYNC ERROR:", error)
+            return 0
+
+
+    
+    def sync_pending_question_saves(self, local_db):
+        """Sync pending bookmark changes in one batch."""
+
+        pending = local_db.get_pending_question_saves()
+
+        if not pending:
+            print("QUESTION SAVE SYNC: 0/0 questions processed")
+            return 0
+
+        items = [
+            {
+                "question_id": str(item["question_id"]),
+                "delta": int(item["delta"]),
+            }
+            for item in pending
+        ]
+
+        try:
+            response = self.supabase.rpc(
+                "sync_question_save_counts_batch",
+                {
+                    "p_items": items,
+                },
+            ).execute()
+
+            synced_count = response.data
+
+            if synced_count != len(pending):
+                raise Exception(
+                    f"Expected {len(pending)} records, "
+                    f"but Supabase processed {synced_count}"
+                )
+
+            for item in pending:
+                local_db.mark_question_save_synced(
+                    item["question_id"],
+                    item["is_saved"],
+                )
+
+            print(
+                f"QUESTION SAVE SYNC: "
+                f"{synced_count}/{len(pending)} questions processed"
+            )
+
+            return synced_count
+
+        except Exception as error:
+            print("QUESTION SAVE SYNC ERROR:", error)
+            return 0
+
+
+    def sync_pending_data(self, local_db):
+        """Synchronize all pending local data with Supabase."""
+
+        # Sync first-attempt statistics.
+        try:
+            self.sync_pending_question_statistics(local_db)
+        except Exception as error:
+            print("QUESTION STATISTICS SYNC DEFERRED:", error)
+
+        # Sync bookmark count changes.
+        try:
+            self.sync_pending_question_saves(local_db)
+        except Exception as error:
+            print("QUESTION SAVE SYNC DEFERRED:", error)

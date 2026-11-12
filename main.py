@@ -9,8 +9,8 @@ from pages.login import LoginPage
 from pages.premium import PremiumPage
 from pages.profile import ProfilePage
 from pages.register import RegisterPage
+from pages.saved_questions import SavedQuestionsPage
 from services.admin_service import AdminService
-from services.attempt_service import QuizAttemptService
 from services.auth import AuthService
 from services.device_identity import (
     get_device_session_id,
@@ -19,6 +19,7 @@ from services.device_identity import (
 )
 from services.quiz_service import QuizService
 from services.subscription_service import SubscriptionService
+from services.local_database_service import LocalDatabaseService
 
 def main(page: ft.Page) -> None:
     """Configure the app and connect page navigation callbacks."""
@@ -26,24 +27,28 @@ def main(page: ft.Page) -> None:
     page.padding = 30
 
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    local_db = LocalDatabaseService()
+    local_db.initialize()
+
     auth_service = AuthService(supabase)
     quiz_service = QuizService(supabase)
-    attempt_service = QuizAttemptService(supabase)
     subscription_service = SubscriptionService(supabase)
     admin_service = AdminService(supabase)
     device_session_id = get_device_session_id()
 
+       
     def show_login() -> None:
         page.clean()
         login_page = LoginPage(
             page,
             auth_service,
-            show_home,
+            lambda: show_home(sync_after_login=True),
             show_register,
             is_device_associated(),
         )
         page.add(login_page.build())
         page.update()
+        
 
     def show_register() -> None:
         if is_device_associated():
@@ -60,7 +65,7 @@ def main(page: ft.Page) -> None:
         page.add(register_page.build())
         page.update()
 
-    def show_home() -> None:
+    def show_home(sync_after_login=False) -> None:
         page.clean()
         device_allowed = subscription_service.claim_device_user(
             device_session_id
@@ -91,15 +96,20 @@ def main(page: ft.Page) -> None:
             page.update()
             return
 
+        
         home_page = HomePage(
             page,
             quiz_service,
-            attempt_service,
             subscription_service,
+            local_db,
             show_profile,
             show_home,
             device_session_id,
         )
+
+        if sync_after_login:
+            home_page.sync_data_in_background()
+
         page.add(home_page.build())
         page.update()
 
@@ -131,6 +141,6 @@ def main(page: ft.Page) -> None:
         page.update()
 
     show_login()
-
+   
 if __name__ == "__main__":
     ft.run(main)
