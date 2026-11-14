@@ -445,7 +445,7 @@ class QuizService:
     def get_random_questions(
         self,
         category_id,
-        num_questions_fetched=30,
+        num_questions_fetched=40,
         num_questions_show=20,
     ):
         response = (

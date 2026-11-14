@@ -330,8 +330,7 @@ class QuizListPage:
                 ft.DropdownOption(key="10", text="10 questions"),
                 ft.DropdownOption(key="20", text="20 questions"),
                 ft.DropdownOption(key="30", text="30 questions"),
-                ft.DropdownOption(key="50", text="50 questions"),
-                ft.DropdownOption(key="all", text="All questions"),
+                ft.DropdownOption(key="40", text="40 questions"),
             ],
         )
 
@@ -399,33 +398,25 @@ class QuizListPage:
 
         questions = self.quiz_service.get_random_questions(
             self.category_id,
-            self.question_count,
+            num_questions_fetched=40,
+            num_questions_show=self.question_count,
         )
 
         if not questions:
-
             return
 
-        quiz_page = QuizPage(
-            self.page,
-            self.quiz_service,
-            self.subscription_service,
-            self.local_db,
-            None,
-            f"{self.category_name} — Random Quiz",
-            None,
-            self.on_profile,
-            self.on_home,
-            self.device_session_id,
-            None,
-            category_id=self.category_id,
+        content = self._build_quiz_page(
+            quiz_id=None,
+            quiz_title=f"{self.category_name} — Random Quiz",
+            time_limit_seconds=len(questions) * 20,
             questions=questions,
+            category_id=self.category_id,
         )
-        
 
-        self.page.clean()
-        self.page.add(quiz_page.build())
-        self.page.update()        
+        if content is not None:
+            self.page.clean()
+            self.page.add(content)
+            self.page.update()        
 
     def open_quiz(
         self,
@@ -469,29 +460,26 @@ class QuizListPage:
                 return
 
         try:
+            questions = self.quiz_service.get_questions(quiz_id)
 
-            self.page.clean()
+            if self.question_count is not None:
+                questions = questions[:self.question_count]
 
-            quiz_page = QuizPage(
-                self.page,
-                self.quiz_service,
-                self.subscription_service,
-                self.local_db,
-                quiz_id,
-                quiz_title,
-                time_limit_seconds,
-                self.on_profile,
-                self.on_home,
-                self.device_session_id,
-                self.question_count
+            content = self._build_quiz_page(
+                quiz_id=quiz_id,
+                quiz_title=quiz_title,
+                time_limit_seconds=time_limit_seconds,
+                questions=questions,
             )
 
-            content = quiz_page.build()
+            if content is None:
+                return
 
+            self.page.clean()
             self.page.add(content)
+            self.page.update()
 
         except Exception as error:
-
             self.page.clean()
 
             self.page.add(
@@ -515,6 +503,48 @@ class QuizListPage:
             )
 
             self.page.update()
+
+    def _build_quiz_page(
+        self,
+        quiz_id,
+        quiz_title,
+        time_limit_seconds,
+        questions,
+        category_id=None,
+    ):
+        if not questions:
+            return None
+
+        question_ids = [
+            question["id"]
+            for question in questions
+        ]
+
+        question_correct_rates = (
+            self.quiz_service.get_question_correct_rates(
+                question_ids
+            )
+        )
+
+
+        quiz_page = QuizPage(
+            self.page,
+            self.quiz_service,
+            self.subscription_service,
+            self.local_db,
+            quiz_id,
+            quiz_title,
+            time_limit_seconds,
+            self.on_profile,
+            self.on_home,
+            self.device_session_id,
+            self.question_count,
+            category_id=category_id,
+            questions=questions,
+            question_correct_rates=question_correct_rates,
+        )
+
+        return quiz_page.build()
         
     
 class QuizPage:
@@ -533,6 +563,7 @@ class QuizPage:
         question_count,
         category_id=None,
         questions=None,
+        question_correct_rates=None
     ):
         self.page = page
         self.quiz_service = quiz_service
@@ -547,7 +578,7 @@ class QuizPage:
         self.question_count = question_count
         self.category_id = category_id
         self.questions = questions or []
-        self.question_correct_rates = {}
+        self.question_correct_rates = question_correct_rates or {}
         
 
         
@@ -568,6 +599,7 @@ class QuizPage:
 
         # Keep track of every answer selected
         self.selected_answers = []
+        self.attempt_id = None
 
         self.question_save_states = {}
         self.save_button = None
@@ -624,10 +656,6 @@ class QuizPage:
             print("Could not update saved question:", error)
     
     def load_questions(self):
-        self.questions = self.quiz_service.get_questions(
-            self.quiz_id
-        )
-
         if self.question_count is not None:
             self.questions = self.questions[:self.question_count]
 
@@ -635,12 +663,6 @@ class QuizPage:
             question["id"]
             for question in self.questions
         ]
-
-        self.question_correct_rates = (
-            self.quiz_service.get_question_correct_rates(
-                question_ids
-            )
-        )
 
     def select_answer(self, question, option_key):
         is_correct = (
@@ -687,29 +709,19 @@ class QuizPage:
             
 
     def next_question(self, e=None):
+
         if self.selected_answer is None:
             return
 
-        question = self.questions[
-            self.current_question_index
-        ]
-
-        self.selected_answers.append(
-            {
-                "question_id": question["id"],
-                "selected_option": self.selected_answer["option"],
-                "is_correct": self.selected_answer["is_correct"],
-            }
-        )
+        self.record_current_answer()
 
         self.current_question_index += 1
+
+
         self.current_attempt_correct = None
         self.selected_answer = None
 
-        if (
-            self.current_question_index
-            >= len(self.questions)
-        ):
+        if self.current_question_index >= len(self.questions):
             self.save_attempt()
             return
 
@@ -794,6 +806,7 @@ class QuizPage:
         except Exception as error:
             self.show_save_error(str(error))
             
+    
     def save_attempt(self):
         self.time_taken_seconds = (
             self.time_limit_seconds - self.remaining_seconds
@@ -801,7 +814,9 @@ class QuizPage:
             else None
         )
 
+        # First, save the attempt locally.
         try:
+            print("SAVING ATTEMPT...")
             self.attempt_id = self.local_db.create_attempt(
                 user_id=None,
                 quiz_id=self.quiz_id,
@@ -816,15 +831,19 @@ class QuizPage:
 
             print("LOCAL QUIZ ATTEMPT SAVED:", self.attempt_id)
 
-            # Synchronize all pending data.
-            self.quiz_service.sync_pending_data(
-                self.local_db
-            )
-
         except Exception as error:
-            print("LOCAL QUIZ ATTEMPT ERROR:", error)
+            self.attempt_id = None
+            print("LOCAL QUIZ ATTEMPT ERROR:", repr(error))
+
+        # Synchronization is independent of local saving.
+        if self.attempt_id is not None:
+            try:
+                self.quiz_service.sync_pending_data(self.local_db)
+            except Exception as error:
+                print("BACKGROUND SYNC ERROR:", repr(error))
 
         self.show_result()
+
             
     def show_save_error(self, error):
         self.page.clean()
@@ -856,8 +875,7 @@ class QuizPage:
         )
 
     def open_saved_review(self):
-        if not self.attempt_id:
-            print("Quiz attempt ID not found.")
+        if self.attempt_id is None:
             return
 
         from pages.results import ResultsPage
@@ -878,7 +896,11 @@ class QuizPage:
     def show_result(self):
         if self.timer:
             self.timer.cancel()
-            self.timer = None
+            self.timer = None  
+
+        if self.selected_answer is not None:
+            self.record_current_answer()
+            self.selected_answer = None
             
         total = len(self.questions)
 
@@ -958,8 +980,16 @@ class QuizPage:
                 ft.Divider(),
 
                 ft.Text(
-                    "Your result has been saved.",
-                    color=ft.Colors.GREEN,
+                    (
+                        "Your result has been saved."
+                        if self.attempt_id is not None
+                        else "Your result could not be saved."
+                    ),
+                    color=(
+                        ft.Colors.GREEN
+                        if self.attempt_id is not None
+                        else ft.Colors.RED
+                    ),
                 ),
 
                 ft.Button(
@@ -1000,22 +1030,31 @@ class QuizPage:
         self.page.update()
         
     
+    
     def try_again(self, e=None):
         if self.timer:
             self.timer.cancel()
             self.timer = None
 
+        # Reset attempt identity
+        self.attempt_id = None
+
+        # Reset timer
         self.remaining_seconds = self.time_limit_seconds
         self.timer_started = False
+        self.time_taken_seconds = None
 
+        # Reset quiz progress
         self.current_question_index = 0
         self.score = 0
         self.selected_answer = None
         self.selected_answers = []
+        self.current_attempt_correct = None
 
         self.page.clean()
         self.page.add(self.build())
         self.page.update()
+
     
     def view_history(self, e=None):
         self.page.clean()
@@ -1118,6 +1157,17 @@ class QuizPage:
             print(f"Error loading question history: {error}")
             return None
 
+    def record_current_answer(self):
+        if self.selected_answer is None:
+            return
+
+        question = self.questions[self.current_question_index]
+
+        self.selected_answers.append({
+            "question_id": question["id"],
+            "selected_option": self.selected_answer["option"],
+            "is_correct": self.selected_answer["is_correct"],
+        })
     
     def build(self):
         if not self.questions:
@@ -1347,34 +1397,42 @@ class QuizPage:
                 option_container
             )
 
-            # Explanation
-            explanation = question.get("explanation")
+        # Explanation
+        explanation = question.get("explanation")
 
-            if explanation:
-                controls.append(
-                    ft.Container(
-                        content=ft.Text(
-                            explanation,
-                            size=17,
-                            selectable=True,
-                        ),
-                        width=float("inf"),
-                        padding=15,
-                        border_radius=10,
-                        bgcolor=ft.Colors.SURFACE_CONTAINER,
-                    )
+        if explanation and self.selected_answer is not None:
+            controls.append(
+                ft.Container(
+                    content=ft.Text(
+                        explanation,
+                        size=17,
+                        selectable=True,
+                    ),
+                    width=float("inf"),
+                    padding=15,
+                    border_radius=10,
+                    bgcolor=ft.Colors.SURFACE_CONTAINER,
                 )
-        
-        controls.append(
-            ft.Button(
-                "Next Question",
-                on_click=self.next_question,
-                disabled=(
-                    self.selected_answer
-                    is None
-                ),
             )
-        )
+        
+        # Navigation button
+        if self.current_question_index == len(self.questions) - 1:
+            navigation_button = ft.Button(
+                "Show Result",
+                icon=ft.Icons.CHECK_CIRCLE_OUTLINE,
+                disabled=self.selected_answer is None,
+                on_click=self.next_question,
+            )
+        else:
+            navigation_button = ft.Button(
+                "Next Question",
+                icon=ft.Icons.ARROW_FORWARD,
+                disabled=self.selected_answer is None,
+                on_click=self.next_question,
+            )
+
+        controls.append(navigation_button)
+        
         if not self.timer_started:
             self.timer_started = True
             self.timer = self.page.run_task(

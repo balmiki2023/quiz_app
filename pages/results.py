@@ -201,12 +201,16 @@ class ResultsPage:
                     ),
                     ft.Row(
                         controls=[
-                            ft.Text(selected_answer_text,
-                                    color=(
-                                        ft.Colors.GREY_600
-                                        if selected_option is None
-                                        else ft.Colors.BLACK
-                                    ),
+                            ft.Text(
+                                selected_answer_text,
+                                color=(
+                                    ft.Colors.GREY_600
+                                    if selected_option is None
+                                    else ft.Colors.with_opacity(
+                                        1,
+                                        ft.Colors.ON_SURFACE,
+                                    )
+                                ),
                             ),
                             *(
                                 [

@@ -9,12 +9,14 @@ class LoginPage:
         auth_service: AuthService,
         on_login,
         on_register,
+        device_session_id : str,
         device_associated=False,
     ):
         self.page = page
         self.auth_service = auth_service
         self.on_login = on_login
         self.on_register = on_register
+        self.device_session_id = device_session_id
         self.device_associated = device_associated
 
         self.email = ft.TextField(
@@ -30,16 +32,18 @@ class LoginPage:
 
         self.message = ft.Text("")
 
+        self.device_replacement_pending = False
+
     def login(self, e):
         try:
-            self.auth_service.login(
-                self.email.value,
+            self.auth_service.login_and_register_device(
+                self.email.value.strip().lower(),
                 self.password.value,
+                self.device_session_id,
             )
 
             self.message.value = "Login successful!"
             self.message.color = ft.Colors.GREEN
-
             self.on_login()
 
         except Exception as error:

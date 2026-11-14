@@ -44,7 +44,8 @@ def main(page: ft.Page) -> None:
             auth_service,
             lambda: show_home(sync_after_login=True),
             show_register,
-            is_device_associated(),
+            device_session_id=device_session_id,
+            device_associated=is_device_associated(),
         )
         page.add(login_page.build())
         page.update()

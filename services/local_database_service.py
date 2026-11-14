@@ -9,18 +9,25 @@ from pathlib import Path
 
 class LocalDatabaseService:
     def __init__(self):
-        # Use Flet's persistent application data directory.
+        import platform
+        print("PLATFORM:", platform.platform())
+
         data_dir = os.getenv("FLET_APP_STORAGE_DATA")
 
-        # Fallback for running the app outside Flet's launcher.
-        if not data_dir:
-            project_root = Path(__file__).resolve().parent.parent
-            data_dir = project_root / ".flet" / "storage" / "data"
+        print("FLET STORAGE:", repr(data_dir))
 
-        self.data_dir = Path(data_dir)
+        if data_dir:
+            self.data_dir = Path(data_dir)
+        else:
+            # Development fallback for desktop.
+            project_root = Path(__file__).resolve().parent.parent
+            self.data_dir = project_root / ".flet" / "storage" / "data"
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path = self.data_dir / "quiz_app.db"
+
+        print("SQLite database path:", self.db_path)
 
     def initialize(self):
         """Create local tables if they do not already exist."""
@@ -567,19 +574,3 @@ class LocalDatabaseService:
 if __name__ == "__main__":
     db = LocalDatabaseService()
     db.initialize()
-
-    connection = sqlite3.connect(db.db_path, timeout=30)
-
-    try:
-        with connection:
-            connection.execute(
-                "DELETE FROM question_first_attempts"
-            )
-            connection.execute(
-                "DELETE FROM question_save_sync"
-            )
-
-        print("SYNC TEST DATA CLEARED")
-
-    finally:
-        connection.close()
