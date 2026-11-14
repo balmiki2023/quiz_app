@@ -1,6 +1,6 @@
 
 const GITHUB_API =
-    "https://api.github.com/repos/balmiki2023/quiz_app/releases/tags/v1.0.0";
+    "https://api.github.com/repos/quizappofficial/quiz_app/releases/tags/v1.0.0";
 
 async function loadDownloads() {
     const windowsButton = document.getElementById("windows-download");
