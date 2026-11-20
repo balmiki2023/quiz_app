@@ -1,0 +1,20 @@
+[project]
+name = "quiz_app"
+version = "1.0.0"
+description = "Practice multiple choice Biology questions "
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "flet==1.1.2",
+    "flet-secure-storage",
+    "supabase==2.31.0",
+    "python-dotenv==1.2.3",
+    "requests==2.34.2",
+]
+
+[tool.flet]
+org = "com.quizapp"
+product = "BioMCQ"
+company = "BioMCQ"
+
+[tool.flet.app]
+module = "main"

@@ -445,29 +445,45 @@ class QuizService:
     def get_random_questions(
         self,
         category_id,
-        num_questions_fetched=40,
         num_questions_show=20,
+        question_filter="all",
+        is_premium=False,
+        attempted_ids=None,
     ):
-        response = (
-            self.supabase
-            .table("questions")
-            .select("*")
-            .eq("category_id", str(category_id))
-            .limit(num_questions_fetched)
-            .execute()
-        )
+        if not is_premium:
+            response = (
+                self.supabase
+                .table("questions")
+                .select("*")
+                .eq("category_id", str(category_id))
+                .order("created_at", desc=False)
+                .limit(40)
+                .execute()
+            )
 
-        questions = response.data or []
+            questions = response.data or []
 
-        if len(questions) <= num_questions_show:
-            return questions
+            if len(questions) <= num_questions_show:
+                return questions
 
-        import random
+            import random
 
-        return random.sample(
-            questions,
-            num_questions_show,
-        )
+            return random.sample(
+                questions,
+                num_questions_show,
+            )
+
+        response = self.supabase.rpc(
+            "get_filtered_random_questions",
+            {
+                "p_category_id": str(category_id),
+                "p_attempted_ids": attempted_ids or [],
+                "p_filter": question_filter,
+                "p_limit": num_questions_show,
+            },
+        ).execute()
+
+        return response.data or []
 
     
     def get_quiz_questions(self, quiz_id):

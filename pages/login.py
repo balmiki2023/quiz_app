@@ -34,13 +34,16 @@ class LoginPage:
 
         self.device_replacement_pending = False
 
-    def login(self, e):
+    async def login(self, e):
         try:
-            self.auth_service.login_and_register_device(
+            response = await self.auth_service.login_and_register_device(
                 self.email.value.strip().lower(),
                 self.password.value,
                 self.device_session_id,
             )
+
+            if not response or not response.session:
+                raise Exception("Login failed.")
 
             self.message.value = "Login successful!"
             self.message.color = ft.Colors.GREEN

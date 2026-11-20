@@ -5,9 +5,16 @@ description = "Practice multiple choice Biology questions "
 requires-python = ">=3.12,<3.15"
 dependencies = [
     "flet==1.0.4",
+    "flet-secure-storage==1.0.4",
     "supabase==2.31.0",
     "python-dotenv==1.2.3",
     "requests==2.34.2",
+]
+
+[dependency-groups]
+dev = [
+    "flet-cli==1.0.4",
+    "flet-desktop==1.0.4",
 ]
 
 [tool.flet]

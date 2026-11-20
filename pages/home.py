@@ -2,6 +2,7 @@ import flet as ft
 import asyncio
 import threading
 import time
+import random
 
 from services.quiz_service import QuizService
 from services.subscription_service import SubscriptionService
@@ -219,6 +220,10 @@ class QuizListPage:
         self.on_home = on_home
         self.device_session_id=device_session_id
         self.question_count = 20
+        self.question_filter = "all"
+
+    def question_filter_changed(self, e):
+        self.question_filter = e.control.value
         
     def on_back(self, e):
         self.page.clean()
@@ -234,6 +239,12 @@ class QuizListPage:
         )
 
         self.page.add(home_page.build())
+
+    def select_question_count(self, count):
+        self.question_count = count
+        self.page.controls.clear()
+        self.page.add(self.build())
+        self.page.update()
 
     def build(self):
         try:
@@ -322,21 +333,99 @@ class QuizListPage:
                 )
             )
             
-        question_count_dropdown = ft.Dropdown(
-            label="Number of questions",
-            value=str(self.question_count),
-            options=[
-                ft.DropdownOption(key="5", text="5 questions"),
-                ft.DropdownOption(key="10", text="10 questions"),
-                ft.DropdownOption(key="20", text="20 questions"),
-                ft.DropdownOption(key="30", text="30 questions"),
-                ft.DropdownOption(key="40", text="40 questions"),
+        question_count_cards = ft.Row(
+            [
+                ft.Container(
+                    content=ft.Text(
+                        str(count),
+                        color=(
+                            ft.Colors.WHITE
+                            if self.question_count == count
+                            else ft.Colors.ON_SURFACE
+                        ),
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    width=65,
+                    height=60,
+                    alignment=ft.Alignment.CENTER,
+                    bgcolor=(
+                        ft.Colors.BLUE_900
+                        if self.question_count == count
+                        else ft.Colors.SURFACE
+                    ),
+                    border=ft.Border.all(
+                        2 if self.question_count == count else 1,
+                        ft.Colors.BLUE
+                        if self.question_count == count
+                        else ft.Colors.OUTLINE,
+                    ),
+                    border_radius=10,
+                    on_click=lambda e, c=count: self.select_question_count(c),
+                    ink=True,
+                )
+                for count in (10, 20, 30, 40)
             ],
+            spacing=10,
         )
 
-        question_count_dropdown.on_select = (
-            self.question_count_changed
-        )
+        # Check membership status
+        is_premium = self.subscription_service.is_premium()
+
+        question_filter_controls = []
+
+        if is_premium:
+            question_filter_dropdown = ft.Dropdown(
+                label="Question selection",
+                value=self.question_filter,
+                options=[
+                    ft.DropdownOption(
+                        key="all",
+                        text="All questions",
+                    ),
+                    ft.DropdownOption(
+                        key="attempted",
+                        text="Attempted questions",
+                    ),
+                    ft.DropdownOption(
+                        key="not_attempted",
+                        text="Non-attempted questions",
+                    ),
+                ],
+                on_select=self.question_filter_changed,
+            )
+
+            question_filter_controls = [
+                question_filter_dropdown,
+            ]
+
+        else:
+            question_filter_controls = [
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "Free Membership",
+                                weight=ft.FontWeight.BOLD,
+                            ),
+                            ft.Text(
+                                "Only 40 questions available for this category."
+                            ),
+                            ft.Text(
+                                "Upgrade to Premium to access the full "
+                                "question bank and try new questions."
+                            ),
+                        ],
+                        spacing=5,
+                    ),
+                    padding=12,
+                    border=ft.Border.all(
+                        1,
+                        ft.Colors.OUTLINE,
+                    ),
+                    border_radius=10,
+                ),
+            ]
         
         start_quiz_button = ft.Button(
             "Start Quiz",
@@ -359,12 +448,34 @@ class QuizListPage:
                         weight=ft.FontWeight.BOLD,
                     ),
 
-                    ft.Text(
-                        "How many questions do you want to try?",
-                        size=18,
+                    ft.ResponsiveRow(
+                        [
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        *question_filter_controls,
+                                    ],
+                                    spacing=10,
+                                ),
+                                col={"xs": 12, "md": 5},
+                            ),
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Text(
+                                            "Number of questions:",
+                                            size=14,
+                                        ),
+                                        question_count_cards,
+                                    ],
+                                    spacing=10,
+                                ),
+                                col={"xs": 12, "md": 7},
+                            ),
+                        ],
+                        spacing=15,
+                        run_spacing=15,
                     ),
-
-                    question_count_dropdown,
 
                     start_quiz_button,
 
@@ -387,28 +498,62 @@ class QuizListPage:
             ),
         )
         
-    def question_count_changed(self, e):
-
-        if e.control.value == "all":
-            self.question_count = None
-        else:
-            self.question_count = int(e.control.value)
             
     def start_quiz(self, e):
+        is_premium = self.subscription_service.is_premium()
+
+        attempted_ids = []
+
+        if is_premium and self.question_filter in (
+            "attempted",
+            "not_attempted",
+        ):
+            attempted_ids = (
+                self.local_db.get_attempted_question_ids(
+                    self.category_id
+                )
+            )
 
         questions = self.quiz_service.get_random_questions(
-            self.category_id,
-            num_questions_fetched=40,
+            category_id=self.category_id,
             num_questions_show=self.question_count,
+            question_filter=(
+                self.question_filter if is_premium else "all"
+            ),
+            is_premium=is_premium,
+            attempted_ids=attempted_ids,
         )
 
+        # Case 1: No questions available
         if not questions:
+            if self.question_filter == "not_attempted":
+                message = (
+                    "You have already attempted all questions "
+                    "in this category."
+                )
+            elif self.question_filter == "attempted":
+                message = (
+                    "You haven't attempted any questions "
+                    "in this category yet."
+                )
+            else:
+                message = "No questions are currently available."
+
+            self.page.show_dialog(
+                ft.AlertDialog(
+                    title=ft.Text("No questions available"),
+                    content=ft.Text(message),
+                )
+            )
             return
+
+        # Case 2: Fewer questions than requested
+        available_count = len(questions)
 
         content = self._build_quiz_page(
             quiz_id=None,
             quiz_title=f"{self.category_name} — Random Quiz",
-            time_limit_seconds=len(questions) * 20,
+            time_limit_seconds=available_count * 20,
             questions=questions,
             category_id=self.category_id,
         )
@@ -416,7 +561,20 @@ class QuizListPage:
         if content is not None:
             self.page.clean()
             self.page.add(content)
-            self.page.update()        
+            self.page.update()
+
+            if available_count < self.question_count:
+                self.page.show_dialog(
+                    ft.AlertDialog(
+                        title=ft.Text("Fewer questions available"),
+                        content=ft.Text(
+                            f"You requested {self.question_count} "
+                            f"questions, but only {available_count} "
+                            "are available. Your quiz will start "
+                            "with the available questions."
+                        ),
+                    )
+                )        
 
     def open_quiz(
         self,
@@ -605,6 +763,7 @@ class QuizPage:
         self.save_button = None
         self.save_count_text = ft.Text("0", size=14)
         self.current_attempt_correct = None
+        self.option_orders = {}
 
     def get_question_save_state(self, question_id):
         question_id = str(question_id)
@@ -624,9 +783,23 @@ class QuizPage:
             return False
 
 
+    
     def toggle_question_save(self, question_id, button, count_text):
         try:
             is_saved = self.local_db.toggle_question_save(question_id)
+
+            # Maximum saved-question limit reached.
+            if is_saved is None:
+                self.save_limit_message.value = (
+                    "Save max. limit reached. Remove some saved questions."
+                )
+                self.save_limit_message.visible = True
+                self.page.update()
+                return
+
+            # Clear any previous limit message.
+            self.save_limit_message.value = ""
+            self.save_limit_message.visible = False
 
             self.question_save_states[str(question_id)] = is_saved
 
@@ -654,6 +827,7 @@ class QuizPage:
 
         except Exception as error:
             print("Could not update saved question:", error)
+
     
     def load_questions(self):
         if self.question_count is not None:
@@ -690,6 +864,7 @@ class QuizPage:
         try:
             self.local_db.record_first_attempt(
                 question_id=question_id,
+                category_id=question.get("category_id") or self.category_id,
                 selected_answer=option_key,
                 is_correct=is_correct,
             )
@@ -873,6 +1048,27 @@ class QuizPage:
                 spacing=15,
             )
         )
+
+    def get_shuffled_options(self, question):
+        question_id = str(question["id"])
+
+        if question_id not in self.option_orders:
+            original_options = [
+                ("A", question.get("option_a", "")),
+                ("B", question.get("option_b", "")),
+                ("C", question.get("option_c", "")),
+                ("D", question.get("option_d", "")),
+            ]
+
+            random.shuffle(original_options)
+
+            self.option_orders[question_id] = [
+                (display_key, original_key, option_text)
+                for display_key, (original_key, option_text)
+                in zip(["A", "B", "C", "D"], original_options)
+            ]
+
+        return self.option_orders[question_id]
 
     def open_saved_review(self):
         if self.attempt_id is None:
@@ -1340,27 +1536,41 @@ class QuizPage:
             save_button.on_click = lambda e, qid=question_id, btn=save_button, count=save_count_text: (
                 self.toggle_question_save(qid, btn, count)
             )
+            self.save_limit_message = ft.Text(
+                "",
+                color=ft.Colors.RED,
+                size=12,
+                visible=False,
+            )
 
             controls.append(
-                ft.Row(
+                ft.Column(
                     [
-                        save_button,
-                        save_count_text,
+                        ft.Row(
+                            [
+                                save_button,
+                                save_count_text,
+                            ],
+                            spacing=5,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        self.save_limit_message,
                     ],
-                    spacing=5,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=3,
                 )
             )
 
-        for option_key, option_text in options:
+        options = self.get_shuffled_options(question)
+
+        for display_key, original_key, option_text in options:
 
             is_selected = (
                 self.selected_answer is not None
-                and self.selected_answer["option"] == option_key
+                and self.selected_answer["option"] == original_key
             )
 
             is_correct_option = (
-                option_key == question.get("correct_option")
+                original_key == question.get("correct_option")
             )
 
             if self.selected_answer is not None and is_correct_option:
@@ -1372,7 +1582,7 @@ class QuizPage:
 
             option_container = ft.Container(
                 content=ft.Text(
-                    f"{option_key}. {option_text}",
+                    f"{display_key}. {option_text}",
                     size=18,
                 ),
                 padding=15,
@@ -1387,12 +1597,11 @@ class QuizPage:
                 on_click=(
                     None
                     if self.selected_answer is not None
-                    else lambda e, key=option_key:
+                    else lambda e, key=original_key:
                         self.select_answer(question, key)
                 ),
                 ink=True,
             )
-
             controls.append(
                 option_container
             )

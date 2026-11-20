@@ -16,12 +16,50 @@ class SavedQuestionsPage:
 
         self.saved_questions = []
 
+        self.current_page = 0
+        self.page_size = 20
+        self.total_saved_questions = 0
+
+
     def load_saved_questions(self):
+        self.total_saved_questions = (
+            self.local_db.get_saved_question_count()
+        )
+
         self.saved_questions = (
             self.local_db.get_saved_questions(
-                self.quiz_service
+                self.quiz_service,
+                page=self.current_page,
+                page_size=self.page_size,
             )
         )
+
+    def go_to_next_page(self, e):
+        total_pages = (
+            self.total_saved_questions + self.page_size - 1
+        ) // self.page_size
+
+        if self.current_page < total_pages - 1:
+            self.current_page += 1
+            self.refresh_page()
+
+
+    def go_to_previous_page(self, e):
+        if self.current_page > 0:
+            self.current_page -= 1
+            self.refresh_page()
+
+
+    def refresh_page(self):
+        try:
+            self.load_saved_questions()
+
+            self.page.controls.clear()
+            self.page.add(self.build())
+            self.page.update()
+
+        except Exception as error:
+            print("Could not change saved questions page:", error)
 
     def remove_saved_question(self, question_id):
         try:
@@ -43,6 +81,7 @@ class SavedQuestionsPage:
         except Exception as error:
             print("Could not remove saved question:", error)
 
+    
     def build(self):
         try:
             self.load_saved_questions()
@@ -55,13 +94,14 @@ class SavedQuestionsPage:
                         color=ft.Colors.RED,
                     ),
                     ft.Text(str(error)),
-                    ft.ElevatedButton(
+                    ft.Button(
                         "Back",
                         on_click=lambda e: self.on_back(),
                     ),
                 ]
             )
 
+        # Header
         controls = [
             ft.Row(
                 [
@@ -78,6 +118,7 @@ class SavedQuestionsPage:
             )
         ]
 
+        # Question cards
         if not self.saved_questions:
             controls.append(
                 ft.Text("You haven't saved any questions yet.")
@@ -121,9 +162,41 @@ class SavedQuestionsPage:
                     )
                 )
 
+        # Pagination
+        total_pages = (
+            self.total_saved_questions + self.page_size - 1
+        ) // self.page_size
+
+        if self.total_saved_questions > 0:
+            controls.append(ft.Divider())
+
+            controls.append(
+                ft.Row(
+                    [
+                        ft.Button(
+                            "Previous",
+                            icon=ft.Icons.ARROW_BACK,
+                            disabled=self.current_page == 0,
+                            on_click=self.go_to_previous_page,
+                        ),
+                        ft.Text(
+                            f"Page {self.current_page + 1} of {total_pages}"
+                        ),
+                        ft.Button(
+                            "Next",
+                            icon=ft.Icons.ARROW_FORWARD,
+                            disabled=self.current_page >= total_pages - 1,
+                            on_click=self.go_to_next_page,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                )
+            )
+
         return ft.Column(
             controls,
             spacing=15,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
         )
+

@@ -1,6 +1,7 @@
 import uuid
 
 from supabase import Client
+from datetime import datetime, timezone
 
 class SubscriptionService:
     def __init__(self, supabase: Client):
@@ -41,7 +42,25 @@ class SubscriptionService:
         if not subscription:
             return False
 
-        return subscription.get("status") == "active"
+        if subscription.get("status") != "active":
+            return False
+
+        expiry = subscription.get("current_period_end")
+
+        if not expiry:
+            return False
+
+        try:
+            expiry_date = datetime.fromisoformat(
+                expiry.replace("Z", "+00:00")
+            )
+
+            return expiry_date > datetime.now(timezone.utc)
+
+        except (ValueError, TypeError) as error:
+            print(f"SUBSCRIPTION EXPIRY ERROR: {error}")
+            return False
+            
 
     def create_device_session_id(self):
         return str(uuid.uuid4())

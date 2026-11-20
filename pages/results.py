@@ -278,17 +278,20 @@ class ResultsPage:
             )
 
             self.page.add(
-                ft.Container(
-                    content=review_content,
-                    width=float("inf"),
-                    padding=20,
+                ft.Column(
+                    [
+                        ft.Container(
+                            content=review_content,
+                            width=float("inf"),
+                            padding=20,
+                        )
+                    ],
+                    expand=True,
+                    scroll=ft.ScrollMode.AUTO,
                 )
             )
 
-            self.page.scroll = ft.ScrollMode.AUTO
             self.page.update()
-            self.page.run_task(self.reset_scroll)
-
         except Exception as error:
             self.page.clean()
 
@@ -320,11 +323,6 @@ class ResultsPage:
 
             self.page.update()
             
-    async def reset_scroll(self):
-        await self.page.scroll_to(
-            offset=0,
-            duration=0,
-        )
 
     def previous_page(self, e=None):
         if self.current_page > 0:

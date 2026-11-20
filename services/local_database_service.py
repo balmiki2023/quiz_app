@@ -46,6 +46,7 @@ class LocalDatabaseService:
                 """
                 CREATE TABLE IF NOT EXISTS question_first_attempts (
                     question_id TEXT PRIMARY KEY,
+                    category_id TEXT,
                     selected_answer TEXT NOT NULL,
                     is_correct INTEGER NOT NULL,
                     attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -97,22 +98,26 @@ class LocalDatabaseService:
 
                 """
             )
+            cursor = connection.cursor()
 
-            
-            columns = {
-                row[1]
-                for row in connection.execute(
-                    "PRAGMA table_info(quiz_attempts)"
-                ).fetchall()
-            }
+            cursor.execute(
+                "PRAGMA table_info(question_first_attempts)"
+            )
 
-            if "quiz_title" not in columns:
-                connection.execute(
-                    "ALTER TABLE quiz_attempts ADD COLUMN quiz_title TEXT"
+            columns = [
+                row[1] for row in cursor.fetchall()
+            ]
+
+            if "category_id" not in columns:
+                cursor.execute(
+                    """
+                    ALTER TABLE question_first_attempts
+                    ADD COLUMN category_id TEXT
+                    """
                 )
 
-                connection.commit()
-
+            connection.commit()
+            
         finally:
             connection.close()
 
@@ -178,6 +183,7 @@ class LocalDatabaseService:
     def record_first_attempt(
         self,
         question_id,
+        category_id,
         selected_answer,
         is_correct,
     ):
@@ -191,14 +197,16 @@ class LocalDatabaseService:
                 """
                 INSERT INTO question_first_attempts (
                     question_id,
+                    category_id,
                     selected_answer,
                     is_correct
                 )
-                VALUES (?, ?, ?)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(question_id) DO NOTHING
                 """,
                 (
                     str(question_id),
+                    str(category_id),
                     str(selected_answer),
                     int(is_correct),
                 ),
@@ -346,6 +354,27 @@ class LocalDatabaseService:
         finally:
             connection.close()
 
+    def get_attempted_question_ids(self, category_id=None):
+        connection = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+        )
+
+        try:
+            cursor = connection.execute(
+                """
+                SELECT question_id
+                FROM question_first_attempts
+                WHERE category_id = ?
+                """,
+                (str(category_id),),
+            )
+
+            return [row[0] for row in cursor.fetchall()]
+
+        finally:
+            connection.close()
+
     def get_pending_question_statistics(self):
         connection = sqlite3.connect(
             self.db_path,
@@ -410,6 +439,7 @@ class LocalDatabaseService:
             connection.close()
 
 
+    
     def toggle_question_save(self, question_id):
         question_id = str(question_id)
 
@@ -419,75 +449,123 @@ class LocalDatabaseService:
         )
 
         try:
-            with connection:
-                cursor = connection.execute(
+            connection.execute("BEGIN IMMEDIATE")
+
+            cursor = connection.execute(
+                """
+                SELECT 1
+                FROM question_saves
+                WHERE question_id = ?
+                """,
+                (question_id,),
+            )
+
+            is_saved = cursor.fetchone() is not None
+
+            if is_saved:
+                # Always allow unsaving.
+                connection.execute(
                     """
-                    SELECT 1
-                    FROM question_saves
+                    DELETE FROM question_saves
                     WHERE question_id = ?
                     """,
                     (question_id,),
                 )
 
-                is_saved = cursor.fetchone() is None
+                saved = False
 
-                if is_saved:
-                    connection.execute(
-                        """
-                        INSERT INTO question_saves (question_id)
-                        VALUES (?)
-                        """,
-                        (question_id,),
-                    )
-                else:
-                    connection.execute(
-                        """
-                        DELETE FROM question_saves
-                        WHERE question_id = ?
-                        """,
-                        (question_id,),
-                    )
+            else:
+                # Check the current number of saved questions.
+                cursor = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM question_saves
+                    """
+                )
+
+                saved_count = cursor.fetchone()[0]
+
+                if saved_count >= 200:
+                    connection.rollback()
+                    return None
 
                 connection.execute(
                     """
-                    INSERT INTO question_save_sync (
-                        question_id,
-                        is_saved,
-                        synced_state,
-                        updated_at
-                    )
-                    VALUES (
-                        ?,
-                        ?,
-                        COALESCE(
-                            (
-                                SELECT synced_state
-                                FROM question_save_sync
-                                WHERE question_id = ?
-                            ),
-                            0
-                        ),
-                        CURRENT_TIMESTAMP
-                    )
-                    ON CONFLICT(question_id)
-                    DO UPDATE SET
-                        is_saved = excluded.is_saved,
-                        updated_at = CURRENT_TIMESTAMP
+                    INSERT INTO question_saves (question_id)
+                    VALUES (?)
                     """,
-                    (
-                        question_id,
-                        int(is_saved),
-                        question_id,
-                    ),
+                    (question_id,),
                 )
 
-            return is_saved
+                saved = True
+
+            connection.execute(
+                """
+                INSERT INTO question_save_sync (
+                    question_id,
+                    is_saved,
+                    synced_state,
+                    updated_at
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    COALESCE(
+                        (
+                            SELECT synced_state
+                            FROM question_save_sync
+                            WHERE question_id = ?
+                        ),
+                        0
+                    ),
+                    CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(question_id)
+                DO UPDATE SET
+                    is_saved = excluded.is_saved,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    question_id,
+                    int(saved),
+                    question_id,
+                ),
+            )
+
+            connection.commit()
+            return saved
+
+        except Exception:
+            connection.rollback()
+            raise
 
         finally:
             connection.close()
 
-    def get_saved_question_ids(self):
-        connection = sqlite3.connect(self.db_path, timeout=30)
+    def get_saved_question_count(self):
+        connection = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+        )
+
+        try:
+            cursor = connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM question_saves
+                """
+            )
+
+            return cursor.fetchone()[0]
+
+        finally:
+            connection.close()
+
+    def get_saved_question_ids(self, page=0, page_size=20):
+        connection = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+        )
 
         try:
             cursor = connection.execute(
@@ -495,7 +573,9 @@ class LocalDatabaseService:
                 SELECT question_id
                 FROM question_saves
                 ORDER BY saved_at DESC
-                """
+                LIMIT ? OFFSET ?
+                """,
+                (page_size, page * page_size),
             )
 
             return [row[0] for row in cursor.fetchall()]
@@ -503,8 +583,11 @@ class LocalDatabaseService:
         finally:
             connection.close()
 
-    def get_saved_questions(self, quiz_service):
-        question_ids = self.get_saved_question_ids()
+    def get_saved_questions(self, quiz_service, page=0, page_size=20):
+        question_ids = self.get_saved_question_ids(
+            page=page,
+            page_size=page_size,
+        )
 
         if not question_ids:
             return []
@@ -516,6 +599,7 @@ class LocalDatabaseService:
             print("COULD NOT LOAD SAVED QUESTIONS:", error)
             return []
 
+    
     def get_pending_question_saves(self):
         connection = sqlite3.connect(
             self.db_path,
@@ -571,6 +655,68 @@ class LocalDatabaseService:
             connection.close()
 
 
+    def update_attempt_category_ids(self, question_categories):
+        """
+        Update category IDs for existing first-attempt records.
+
+        question_categories: {
+            question_id: category_id
+        }
+        """
+        if not question_categories:
+            return
+
+        connection = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+        )
+
+        try:
+            connection.executemany(
+                """
+                UPDATE question_first_attempts
+                SET category_id = ?
+                WHERE question_id = ?
+                AND category_id IS NULL
+                """,
+                [
+                    (str(category_id), str(question_id))
+                    for question_id, category_id
+                    in question_categories.items()
+                ],
+            )
+
+            connection.commit()
+
+        finally:
+            connection.close()
+
+    def get_attempts_missing_category(self):
+        connection = sqlite3.connect(
+            self.db_path,
+            timeout=30,
+        )
+
+        try:
+            cursor = connection.execute(
+                """
+                SELECT question_id
+                FROM question_first_attempts
+                WHERE category_id IS NULL
+                """
+            )
+
+            return [row[0] for row in cursor.fetchall()]
+
+        finally:
+            connection.close()
+
+
 if __name__ == "__main__":
-    db = LocalDatabaseService()
-    db.initialize()
+    local_db = LocalDatabaseService()
+    # quiz_service = QuizService(supabase)
+
+    missing_ids = local_db.get_attempts_missing_category()
+
+    print(f"Records to update: {len(missing_ids)}")
+
